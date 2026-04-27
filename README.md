@@ -1,6 +1,6 @@
-# jubilant-tribble — kid age e-paper display
+# BeanClock — kid age e-paper display
 
-[![CI](https://github.com/gkoch02/jubilant-tribble/actions/workflows/ci.yml/badge.svg)](https://github.com/gkoch02/jubilant-tribble/actions/workflows/ci.yml)
+[![CI](https://github.com/gkoch02/BeanClock/actions/workflows/ci.yml/badge.svg)](https://github.com/gkoch02/BeanClock/actions/workflows/ci.yml)
 
 A tiny appliance: a Raspberry Pi Zero W 2 driving a Waveshare 2.13"
 black/white/red e-paper (V4) shows how old your kiddo is, broken down into
@@ -49,8 +49,8 @@ the age is spelled out. A spread:
 On a fresh Pi OS Lite SD card:
 
 ```bash
-git clone https://github.com/<you>/jubilant-tribble.git
-cd jubilant-tribble
+git clone https://github.com/<you>/BeanClock.git
+cd BeanClock
 sudo timedatectl set-timezone America/Los_Angeles  # use your tz (zoneinfo, not an offset)
 sudo bash scripts/install.sh
 sudo $EDITOR /etc/kidage/config.toml         # set name + birth datetime
@@ -125,9 +125,9 @@ kidage/                       # package
   render.py                   # Pillow → (black plane, red plane)
   display.py                  # thin wrapper around the vendored driver
   special.py                  # birthday + milestone detection
+  fonts/Fredoka.ttf           # SIL OFL variable font (shipped with the wheel)
   __main__.py                 # entrypoint: load → render → display | --preview
 vendor/waveshare_epd/         # vendored from waveshareteam/e-Paper
-fonts/Fredoka.ttf             # SIL OFL variable font
 systemd/kidage.{service,timer}
 scripts/install.sh            # idempotent installer
 tests/                        # pure-Python (no panel)
@@ -152,4 +152,4 @@ tests/                        # pure-Python (no panel)
 
 - `kidage/`, `tests/`, `scripts/`, `systemd/` — MIT (see `LICENSE`).
 - `vendor/waveshare_epd/` — MIT, © Waveshare.
-- `fonts/Fredoka.ttf` — SIL Open Font License 1.1, see `fonts/OFL.txt`.
+- `kidage/fonts/Fredoka.ttf` — SIL Open Font License 1.1, see `kidage/fonts/OFL.txt`.

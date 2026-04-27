@@ -21,7 +21,7 @@ class AccentFn(Protocol):
 WIDTH = 250
 HEIGHT = 122
 
-FONT_PATH = Path(__file__).resolve().parent.parent / "fonts" / "Fredoka.ttf"
+FONT_PATH = Path(__file__).resolve().parent / "fonts" / "Fredoka.ttf"
 
 
 def _font(size: int, weight: str = "Regular") -> ImageFont.FreeTypeFont:
