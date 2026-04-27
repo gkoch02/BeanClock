@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import calendar
+from collections.abc import Sequence
 from datetime import datetime
-from typing import Sequence
 
 from kidage.age import AgeBreakdown, pluralize
-
 
 _ORDINAL_SUFFIXES = {1: "st", 2: "nd", 3: "rd"}
 
