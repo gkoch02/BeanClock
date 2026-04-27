@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import calendar
 from datetime import datetime
 from typing import Sequence
 
 from kidage.age import AgeBreakdown, pluralize
+
+
+_ORDINAL_SUFFIXES = {1: "st", 2: "nd", 3: "rd"}
 
 
 def _is_birthday(born_at: datetime, now: datetime) -> bool:
@@ -13,17 +17,14 @@ def _is_birthday(born_at: datetime, now: datetime) -> bool:
     # real Feb 29 hits the equality check above, and we explicitly skip Feb 28
     # so the kid only gets one birthday that year.
     if born_at.month == 2 and born_at.day == 29 and now.month == 2 and now.day == 28:
-        try:
-            datetime(now.year, 2, 29)
-        except ValueError:
-            return True
+        return not calendar.isleap(now.year)
     return False
 
 
 def _ordinal(n: int) -> str:
     if 11 <= (n % 100) <= 13:
         return f"{n}th"
-    return f"{n}{ {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th') }"
+    return f"{n}{_ORDINAL_SUFFIXES.get(n % 10, 'th')}"
 
 
 def detect(
