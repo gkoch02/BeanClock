@@ -7,7 +7,14 @@ black/white/red e-paper (V4) shows how old your kiddo is, broken down into
 years / months / days / hours. It refreshes once an hour during waking hours
 and rests overnight.
 
-![preview](docs/preview.png)
+![preview — heart accent, extended format](docs/preview.png)
+
+The `display.accent` and `display.format` knobs change the border trim and how
+the age is spelled out. A spread:
+
+| Star corners, total days | Balloon corners, total hours |
+| --- | --- |
+| ![star accent, days format](docs/preview-star-days.png) | ![balloon accent, hours format](docs/preview-balloon-hours.png) |
 
 ## Features
 
