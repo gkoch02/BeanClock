@@ -10,6 +10,7 @@ from pathlib import Path
 from kidage.age import compute
 from kidage.config import load
 from kidage.render import compose_preview, render
+from kidage.special import detect as detect_special
 
 log = logging.getLogger("kidage")
 
@@ -80,6 +81,16 @@ def main(argv: list[str] | None = None) -> int:
     age = compute(cfg.born_at, now)
     log.info("kid=%s age=%s", cfg.name, age)
 
+    special = detect_special(
+        cfg.born_at,
+        now,
+        age,
+        birthday=cfg.birthday,
+        milestones=cfg.milestones,
+    )
+    if special is not None:
+        log.info("special-day display: %r", special)
+
     black, red = render(
         cfg.name,
         age,
@@ -87,6 +98,7 @@ def main(argv: list[str] | None = None) -> int:
         accent=cfg.accent,
         flip=cfg.flip,
         age_format=cfg.age_format,
+        special=special,
     )
 
     if args.preview is not None:

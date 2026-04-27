@@ -144,6 +144,37 @@ def test_format_days_uses_total_days_not_calendar_days():
     assert big_black.tobytes() != small_black.tobytes()
 
 
+def test_special_hero_replaces_normal_hero():
+    """In special-day mode the hero text is the override string, and the
+    standard "Y years M months" phrasing is demoted to the sub line — so
+    the black plane must differ from the non-special render."""
+    plain = render("Lily", AGE, BORN)[0].tobytes()
+    special = render("Lily", AGE, BORN, special="Happy 4th Birthday!")[0].tobytes()
+    assert plain != special
+
+
+def test_special_overrides_days_format():
+    """Special days take over regardless of age_format. Pin this so a future
+    refactor doesn't accidentally restore the days/hours hero on a milestone."""
+    days = render("Lily", AGE, BORN, age_format="days")[0].tobytes()
+    special = render(
+        "Lily", AGE, BORN, age_format="days", special="1000 days!"
+    )[0].tobytes()
+    assert days != special
+
+
+def test_special_long_label_respects_width_budget():
+    """'Happy 99th Birthday!' must shrink rather than overflow the frame —
+    the same shrink loop the standard hero relies on."""
+    black, _ = render("Lily", LONG_AGE, BORN, special="Happy 99th Birthday!")
+    inner = range(10, WIDTH - 10)
+    extent = _ink_x_extent(black, range(33, 62), inner)
+    assert extent is not None
+    left, right = extent
+    assert left >= 14
+    assert right <= WIDTH - 14
+
+
 def test_long_hero_would_overflow_at_default_size():
     """Sanity check that the budget test above actually exercises the shrink
     path: '99 years  11 months' at 28pt Bold must exceed WIDTH-28. If the

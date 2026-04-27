@@ -40,10 +40,11 @@ journalctl -u kidage.service -f
 ## Architecture
 
 `kidage/__main__.py` is the only entrypoint. It loads `kidage.config` →
-calls `kidage.age.compute` → calls `kidage.render.render` → either writes a
-PNG (`--preview`) or calls `kidage.display.show`. The split exists so the
-render path is hardware-free and exercised by tests, while `display.py`
-isolates the `RPi.GPIO` / `spidev` blast radius.
+calls `kidage.age.compute` → calls `kidage.special.detect` → calls
+`kidage.render.render` → either writes a PNG (`--preview`) or calls
+`kidage.display.show`. The split exists so the render path is hardware-free
+and exercised by tests, while `display.py` isolates the `RPi.GPIO` /
+`spidev` blast radius.
 
 **Image planes (the easy thing to get wrong).** `render()` returns two PIL
 images, both mode `"1"`, both at the panel's native 250×122. In each plane
@@ -94,6 +95,19 @@ picks between two hero baselines: `HERO_Y_TWO_LINE = 33` for `extended`
 2pt steps down to 16pt if the string would overflow `WIDTH - 28`; preserve
 that shrink loop when changing strings, since "31756 hours" already lands
 near the limit.
+
+**Special-day mode is a third axis on top of `age_format`.**
+`kidage.special.detect()` returns a hero override string when `now` falls
+on the kid's birthday (matching `born_at.month`/`day`, with Feb 29 → Feb
+28 fallback in non-leap years) or when `age.total_days` is in the
+configured milestones. `__main__` passes the result to `render()` as the
+`special` keyword. When set, `render()` ignores `age_format` for the hero
+row, uses `HERO_Y_TWO_LINE`, and forces the sub line to `_hero_line(age)`
+("Y years M months") regardless of format — so a milestone hit in
+`format = "days"` doesn't render "1000 days!" over "1000 days". Birthday
+wins over milestone on overlap; both are toggleable via `[special_days]`
+in the config. The same hero shrink loop applies, so long labels like
+"Happy 99th Birthday!" don't need special handling.
 
 ## Configuration
 

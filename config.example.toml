@@ -12,3 +12,11 @@ accent = "heart"
 # "extended" = years/months hero with days/hours subtitle (default).
 # "days" or "hours" = single big total count.
 format = "extended"
+
+[special_days]
+# Show "Happy Nth Birthday!" on the kid's birthday (Feb 29 falls back to
+# Feb 28 in non-leap years).
+birthday = true
+# Show "N days!" when total_days exactly hits one of these milestones.
+# Pick round numbers that feel celebratory; set to [] to disable.
+milestones = [100, 500, 1000, 2000, 5000]
