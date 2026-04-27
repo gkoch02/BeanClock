@@ -6,7 +6,6 @@ from pathlib import Path
 
 from PIL import Image
 
-
 STATE_DIR = Path(os.environ.get("KIDAGE_STATE_DIR", "/var/lib/kidage"))
 LAST_CLEAR_FILE = STATE_DIR / "last-clear"
 

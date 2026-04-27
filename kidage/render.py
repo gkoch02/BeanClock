@@ -7,7 +7,6 @@ from PIL import Image, ImageDraw, ImageFont
 
 from kidage.age import AgeBreakdown, pluralize
 
-
 WIDTH = 250
 HEIGHT = 122
 

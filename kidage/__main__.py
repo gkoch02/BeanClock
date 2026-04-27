@@ -11,7 +11,6 @@ from kidage.age import compute
 from kidage.config import load
 from kidage.render import compose_preview, render
 
-
 log = logging.getLogger("kidage")
 
 
@@ -31,7 +30,10 @@ def main(argv: list[str] | None = None) -> int:
         "--config",
         type=Path,
         default=None,
-        help="Path to TOML config (env: KIDAGE_CONFIG; default: ./config.toml or /etc/kidage/config.toml).",
+        help=(
+            "Path to TOML config (env: KIDAGE_CONFIG; "
+            "default: ./config.toml or /etc/kidage/config.toml)."
+        ),
     )
     parser.add_argument(
         "--preview",

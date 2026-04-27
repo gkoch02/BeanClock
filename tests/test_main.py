@@ -1,12 +1,9 @@
-import sys
 from pathlib import Path
 
-import pytest
 from PIL import Image
 
 from kidage.__main__ import _default_config_path, main
 from kidage.render import HEIGHT, WIDTH
-
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXAMPLE_CONFIG = REPO_ROOT / "config.example.toml"

@@ -1,8 +1,7 @@
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 from kidage.age import AgeBreakdown
 from kidage.render import FRAME_PAD, HEIGHT, WIDTH, compose_preview, render
-
 
 PT = timezone(timedelta(hours=-7))
 BORN = datetime(2022, 9, 12, 3, 47, tzinfo=PT)

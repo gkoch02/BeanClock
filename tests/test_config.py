@@ -1,4 +1,4 @@
-from datetime import timezone, timedelta
+from datetime import timedelta
 from pathlib import Path
 
 import pytest

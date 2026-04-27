@@ -1,9 +1,8 @@
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from kidage.age import AgeBreakdown, compute, pluralize
-
 
 PT = timezone(timedelta(hours=-7))
 
