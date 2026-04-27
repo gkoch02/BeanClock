@@ -35,8 +35,12 @@ def detect(
     milestones: Sequence[int],
 ) -> str | None:
     if birthday and _is_birthday(born_at, now):
-        if age.years > 0:
-            return f"Happy {_ordinal(age.years)} Birthday!"
+        # Use the calendar-year delta, not age.years: age.years only ticks over
+        # at the exact birth minute, so a kid born at 18:00 would otherwise see
+        # "Happy 3rd Birthday!" on the morning of their 4th birthday.
+        years_turning = now.year - born_at.year
+        if years_turning > 0:
+            return f"Happy {_ordinal(years_turning)} Birthday!"
         return "Happy Birthday!"
     if age.total_days in milestones:
         return f"{pluralize(age.total_days, 'day')}!"

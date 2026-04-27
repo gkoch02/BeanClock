@@ -53,10 +53,25 @@ def test_birthday_disabled_by_config():
 
 
 def test_leap_day_birth_celebrates_feb_28_in_non_leap_year():
+    """On Feb 28 in a non-leap year, a Feb 29 kid is celebrating turning N
+    even though dateutil still reports years=N-1 (the real anniversary is the
+    next Feb 29). The ordinal follows the year being celebrated."""
     born = datetime(2020, 2, 29, 12, 0, tzinfo=PT)
     now = datetime(2025, 2, 28, 12, 0, tzinfo=PT)  # 2025 is non-leap
     age = AgeBreakdown(4, 11, 30, 0, total_days=1826, total_hours=43824)
-    assert detect(born, now, age, birthday=True, milestones=()) == "Happy 4th Birthday!"
+    assert detect(born, now, age, birthday=True, milestones=()) == "Happy 5th Birthday!"
+
+
+def test_birthday_ordinal_correct_before_birth_minute():
+    """Bug guard: a kid born at 18:00 must read 'Happy 4th Birthday!' on the
+    morning of their 4th birthday, not 'Happy 3rd Birthday!'. The ordinal
+    must come from the calendar-year delta, not age.years (which only ticks
+    over at the exact birth minute)."""
+    born = datetime(2022, 9, 12, 18, 0, tzinfo=PT)
+    morning = datetime(2026, 9, 12, 7, 0, tzinfo=PT)  # 11h before birth minute
+    # dateutil reports 3y 11m 30d 13h here — age.years lags by a day.
+    age = AgeBreakdown(3, 11, 30, 13, total_days=1460, total_hours=35053)
+    assert detect(born, morning, age, birthday=True, milestones=()) == "Happy 4th Birthday!"
 
 
 def test_leap_day_birth_skips_feb_28_in_leap_year():
