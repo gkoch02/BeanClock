@@ -105,12 +105,22 @@ and assumes the offset matches the family's wall clock.
 
 ## Scheduling
 
-`systemd/kidage.timer` uses `OnCalendar=*-*-* 07..21:00:00` with
-`Persistent=true`. The persistent flag means a Pi that boots mid-day
-catches up exactly once instead of waiting for the next top of the hour;
-keep both flags or hourly catch-up regressions become hard to spot.
-`AccuracySec=1min` lets `systemd` batch with other timers, which matters
-on a Zero 2 because waking SPI takes a non-trivial fraction of a watt.
+`systemd/kidage.timer` fires every hour, all day (`OnCalendar=*-*-*
+*:00:00`). The wake-window enforcement lives in `kidage.__main__`: it
+compares `now.hour` to `cfg.wake_hour`/`cfg.sleep_hour` (both inclusive)
+and exits 0 without touching the panel when outside the window. This
+keeps `/etc/kidage/config.toml` as the single source of truth for the
+schedule — editing the timer is no longer required to change waking
+hours. `--preview` deliberately bypasses the window so layout work works
+at any hour.
+
+`Persistent=true` means a Pi that boots mid-day catches up exactly once
+instead of waiting for the next top of the hour; keep that flag or
+hourly catch-up regressions become hard to spot. `AccuracySec=1min` lets
+`systemd` batch with other timers, which matters on a Zero 2 because
+waking SPI takes a non-trivial fraction of a watt — so does spawning
+Python every hour for the no-op slots, but the cost is dwarfed by the
+SPI-active hours and the simpler "edit one TOML file" UX wins.
 
 ## Vendored code
 

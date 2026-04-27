@@ -61,6 +61,17 @@ def main(argv: list[str] | None = None) -> int:
         if args.now
         else datetime.now(tz=cfg.born_at.tzinfo)
     )
+
+    # The systemd timer fires hourly all day, so the wake/sleep window in
+    # config is what actually decides which hours touch the panel. --preview
+    # bypasses the window so layout work doesn't depend on wall-clock time.
+    if args.preview is None and not (cfg.wake_hour <= now.hour <= cfg.sleep_hour):
+        log.info(
+            "now=%s hour=%d outside wake window [%d, %d]; skipping refresh",
+            now.isoformat(), now.hour, cfg.wake_hour, cfg.sleep_hour,
+        )
+        return 0
+
     age = compute(cfg.born_at, now)
     log.info("kid=%s age=%s", cfg.name, age)
 

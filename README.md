@@ -20,7 +20,10 @@ the age is spelled out. A spread:
 
 - Beautiful, legible, playful layout — rounded **Fredoka** type, two-color
   accents (heart / star / balloon), no fussy clipart.
-- Hourly refresh from 07:00–21:00 (configurable), driven by a `systemd` timer.
+- Hourly refresh during a configurable wake window (default 07:00–21:00 local
+  time), driven by a `systemd` timer that fires every hour and a wake-window
+  check in the script itself — edit `/etc/kidage/config.toml` to change the
+  hours, no timer reload needed.
 - Single TOML config file for the kid's name, birth datetime+timezone, wake
   window, and accent glyph.
 - Once-a-day full clear to suppress ghosting; the other ~14 daily refreshes
@@ -75,8 +78,10 @@ format = "extended" # extended (years/months + days/hours) | days | hours
 ```
 
 Edit `/etc/kidage/config.toml` and run `sudo systemctl start kidage.service`
-to push the change to the panel immediately. The next scheduled refresh will
-also pick up the change.
+to push the change to the panel immediately (the manual refresh still
+respects `wake_hour`/`sleep_hour`, so widen those first if you're testing
+outside waking hours). The next scheduled refresh will also pick up the
+change.
 
 ## Development without hardware
 
