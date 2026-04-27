@@ -1,5 +1,7 @@
 # jubilant-tribble — kid age e-paper display
 
+[![CI](https://github.com/gkoch02/jubilant-tribble/actions/workflows/ci.yml/badge.svg)](https://github.com/gkoch02/jubilant-tribble/actions/workflows/ci.yml)
+
 A tiny appliance: a Raspberry Pi Zero W 2 driving a Waveshare 2.13"
 black/white/red e-paper (V4) shows how old your kiddo is, broken down into
 years / months / days / hours. It refreshes once an hour during waking hours
