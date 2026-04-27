@@ -80,3 +80,36 @@ accent = "unicorn"
 """)
     with pytest.raises(ValueError):
         load(p)
+
+
+def test_age_format_defaults_to_extended(tmp_path):
+    cfg = load(_write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00+00:00
+"""))
+    assert cfg.age_format == "extended"
+
+
+@pytest.mark.parametrize("value", ["days", "hours", "extended"])
+def test_age_format_accepts_known_values(tmp_path, value):
+    cfg = load(_write(tmp_path, f"""
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00+00:00
+[display]
+format = "{value}"
+"""))
+    assert cfg.age_format == value
+
+
+def test_rejects_unknown_format(tmp_path):
+    p = _write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00+00:00
+[display]
+format = "weeks"
+""")
+    with pytest.raises(ValueError):
+        load(p)

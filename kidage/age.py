@@ -12,6 +12,8 @@ class AgeBreakdown:
     months: int
     days: int
     hours: int
+    total_days: int = 0
+    total_hours: int = 0
 
 
 def compute(born_at: datetime, now: datetime) -> AgeBreakdown:
@@ -20,7 +22,15 @@ def compute(born_at: datetime, now: datetime) -> AgeBreakdown:
     if now < born_at:
         raise ValueError("now is before born_at; the kiddo isn't here yet")
     rd = relativedelta(now, born_at)
-    return AgeBreakdown(rd.years, rd.months, rd.days, rd.hours)
+    delta = now - born_at
+    return AgeBreakdown(
+        rd.years,
+        rd.months,
+        rd.days,
+        rd.hours,
+        total_days=delta.days,
+        total_hours=int(delta.total_seconds() // 3600),
+    )
 
 
 def pluralize(n: int, unit: str) -> str:

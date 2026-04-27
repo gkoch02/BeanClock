@@ -109,6 +109,32 @@ def test_hero_auto_shrinks_to_stay_within_width_budget():
     assert right <= WIDTH - 14, f"hero overflows right budget: {right}"
 
 
+def test_format_modes_produce_distinct_planes():
+    """Each age_format must visibly change the black plane; otherwise a
+    regression that ignored the new field would slip past the per-format
+    smoke checks below."""
+    age = AgeBreakdown(3, 7, 15, 4, total_days=1324, total_hours=31780)
+    planes = {
+        fmt: render("Lily", age, BORN, age_format=fmt)[0].tobytes()
+        for fmt in ("extended", "days", "hours")
+    }
+    assert planes["extended"] != planes["days"]
+    assert planes["days"] != planes["hours"]
+    assert planes["extended"] != planes["hours"]
+
+
+def test_format_days_uses_total_days_not_calendar_days():
+    """Hero text in days mode must reflect total_days (e.g. 1324) rather
+    than the calendar `days` field (15). If render() reads age.days by
+    mistake, a small total_days input renders the same as a small
+    calendar-days input — pin the distinction."""
+    big = AgeBreakdown(0, 0, 15, 0, total_days=1324, total_hours=31780)
+    small = AgeBreakdown(0, 0, 15, 0, total_days=15, total_hours=360)
+    big_black, _ = render("Lily", big, BORN, age_format="days")
+    small_black, _ = render("Lily", small, BORN, age_format="days")
+    assert big_black.tobytes() != small_black.tobytes()
+
+
 def test_long_hero_would_overflow_at_default_size():
     """Sanity check that the budget test above actually exercises the shrink
     path: '99 years  11 months' at 28pt Bold must exceed WIDTH-28. If the

@@ -62,7 +62,14 @@ def main(argv: list[str] | None = None) -> int:
     age = compute(cfg.born_at, now)
     log.info("kid=%s age=%s", cfg.name, age)
 
-    black, red = render(cfg.name, age, cfg.born_at, accent=cfg.accent, flip=cfg.flip)
+    black, red = render(
+        cfg.name,
+        age,
+        cfg.born_at,
+        accent=cfg.accent,
+        flip=cfg.flip,
+        age_format=cfg.age_format,
+    )
 
     if args.preview is not None:
         compose_preview(black, red).save(args.preview)

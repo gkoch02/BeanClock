@@ -141,6 +141,7 @@ def render(
     born_at: datetime,
     accent: str = "heart",
     flip: bool = False,
+    age_format: str = "extended",
 ) -> tuple[Image.Image, Image.Image]:
     black = Image.new("1", (WIDTH, HEIGHT), 1)
     red = Image.new("1", (WIDTH, HEIGHT), 1)
@@ -162,17 +163,29 @@ def render(
     accent_fn(rd, hx - 14, accent_y)
     accent_fn(rd, hx + hw + 14, accent_y)
 
-    hero = _hero_line(age)
+    if age_format == "days":
+        hero = pluralize(age.total_days, "day")
+        hero_y = 47
+        sub = None
+    elif age_format == "hours":
+        hero = pluralize(age.total_hours, "hour")
+        hero_y = 47
+        sub = None
+    else:
+        hero = _hero_line(age)
+        hero_y = 33
+        sub = _sub_line(age)
+
     hero_size = 28
     hero_font = _font(hero_size, "Bold")
     while _text_width(bd, hero, hero_font) > WIDTH - 28 and hero_size > 16:
         hero_size -= 2
         hero_font = _font(hero_size, "Bold")
-    _draw_centered(bd, 33, hero, hero_font)
+    _draw_centered(bd, hero_y, hero, hero_font)
 
-    sub = _sub_line(age)
-    sub_font = _font(17, "Medium")
-    _draw_centered(bd, 68, sub, sub_font)
+    if sub is not None:
+        sub_font = _font(17, "Medium")
+        _draw_centered(bd, 68, sub, sub_font)
 
     footer_font = _font(13, "Regular")
     footer = f"since {_format_birthday(born_at)}"
