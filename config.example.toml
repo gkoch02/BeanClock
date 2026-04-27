@@ -9,3 +9,6 @@ sleep_hour = 21
 [display]
 flip = false
 accent = "heart"
+# "extended" = years/months hero with days/hours subtitle (default).
+# "days" or "hours" = single big total count.
+format = "extended"

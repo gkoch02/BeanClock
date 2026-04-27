@@ -11,7 +11,6 @@ from kidage.age import compute
 from kidage.config import load
 from kidage.render import compose_preview, render
 
-
 log = logging.getLogger("kidage")
 
 
@@ -31,7 +30,10 @@ def main(argv: list[str] | None = None) -> int:
         "--config",
         type=Path,
         default=None,
-        help="Path to TOML config (env: KIDAGE_CONFIG; default: ./config.toml or /etc/kidage/config.toml).",
+        help=(
+            "Path to TOML config (env: KIDAGE_CONFIG; "
+            "default: ./config.toml or /etc/kidage/config.toml)."
+        ),
     )
     parser.add_argument(
         "--preview",
@@ -62,7 +64,14 @@ def main(argv: list[str] | None = None) -> int:
     age = compute(cfg.born_at, now)
     log.info("kid=%s age=%s", cfg.name, age)
 
-    black, red = render(cfg.name, age, cfg.born_at, accent=cfg.accent, flip=cfg.flip)
+    black, red = render(
+        cfg.name,
+        age,
+        cfg.born_at,
+        accent=cfg.accent,
+        flip=cfg.flip,
+        age_format=cfg.age_format,
+    )
 
     if args.preview is not None:
         compose_preview(black, red).save(args.preview)

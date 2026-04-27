@@ -1,11 +1,17 @@
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 from kidage.age import AgeBreakdown
 from kidage.render import FRAME_PAD, HEIGHT, WIDTH, compose_preview, render
 
-
 PT = timezone(timedelta(hours=-7))
 BORN = datetime(2022, 9, 12, 3, 47, tzinfo=PT)
+
+# Canonical age fixtures. Totals are realistic for the calendar values so that
+# format="days"/"hours" rendering is exercised with plausible inputs.
+AGE = AgeBreakdown(3, 7, 15, 4, total_days=1324, total_hours=31780)
+NEWBORN = AgeBreakdown(0, 0, 0, 1, total_days=0, total_hours=1)
+TWO_YEARS = AgeBreakdown(2, 0, 0, 0, total_days=730, total_hours=17520)
+LONG_AGE = AgeBreakdown(99, 11, 30, 23, total_days=36524, total_hours=876575)
 
 
 def _has_ink(img):
@@ -21,8 +27,7 @@ def _ink_x_extent(img, y_range, x_range=None):
 
 
 def test_render_returns_two_planes_at_panel_size():
-    age = AgeBreakdown(3, 7, 15, 4)
-    black, red = render("Lily", age, BORN)
+    black, red = render("Lily", AGE, BORN)
     assert black.size == (WIDTH, HEIGHT)
     assert red.size == (WIDTH, HEIGHT)
     assert black.mode == "1"
@@ -32,31 +37,27 @@ def test_render_returns_two_planes_at_panel_size():
 
 
 def test_render_handles_newborn():
-    age = AgeBreakdown(0, 0, 0, 1)
-    black, red = render("Lily", age, BORN)
+    black, red = render("Lily", NEWBORN, BORN)
     assert _has_ink(black)
 
 
 def test_render_flip_rotates_both_planes():
-    age = AgeBreakdown(3, 7, 15, 4)
-    upright = render("Lily", age, BORN, flip=False)
-    flipped = render("Lily", age, BORN, flip=True)
+    upright = render("Lily", AGE, BORN, flip=False)
+    flipped = render("Lily", AGE, BORN, flip=True)
     assert upright[0].tobytes() != flipped[0].tobytes()
     assert upright[1].tobytes() != flipped[1].tobytes()
 
 
 def test_compose_preview_is_rgb_panel_size():
-    age = AgeBreakdown(3, 7, 15, 4)
-    black, red = render("Lily", age, BORN)
+    black, red = render("Lily", AGE, BORN)
     p = compose_preview(black, red)
     assert p.size == (WIDTH, HEIGHT)
     assert p.mode == "RGB"
 
 
 def test_render_accepts_known_accents():
-    age = AgeBreakdown(2, 0, 0, 0)
     for accent in ("heart", "star", "balloon"):
-        b, r = render("Lily", age, BORN, accent=accent)
+        b, r = render("Lily", TWO_YEARS, BORN, accent=accent)
         assert _has_ink(r)
 
 
@@ -64,9 +65,8 @@ def test_accents_produce_distinct_red_planes():
     """Each accent must actually paint differently; otherwise an accent-fn
     regression (e.g. _ACCENTS.get always returning the default) would slip
     past the existing "ink exists" check."""
-    age = AgeBreakdown(2, 0, 0, 0)
     planes = {
-        a: render("Lily", age, BORN, accent=a)[1].tobytes()
+        a: render("Lily", TWO_YEARS, BORN, accent=a)[1].tobytes()
         for a in ("heart", "star", "balloon")
     }
     assert planes["heart"] != planes["star"]
@@ -82,8 +82,7 @@ def test_text_clears_frame_pad_margin():
     rounded-corner arcs of the outer black hairline) and assert no black
     text ink in the top and bottom keep-out strips.
     """
-    age = AgeBreakdown(3, 7, 15, 4)
-    black, _ = render("Lily", age, BORN)
+    black, _ = render("Lily", AGE, BORN)
     bp = black.load()
 
     for y in range(2, FRAME_PAD):
@@ -99,14 +98,50 @@ def test_hero_auto_shrinks_to_stay_within_width_budget():
     A long hero like '99 years  11 months' should still center within the
     budgeted band (left edge >= 14, right edge <= WIDTH-14). We restrict
     the x search to skip the frame outline at x=1 and x=WIDTH-2."""
-    long_age = AgeBreakdown(99, 11, 30, 23)
-    black, _ = render("Lily", long_age, BORN)
+    black, _ = render("Lily", LONG_AGE, BORN)
     inner = range(10, WIDTH - 10)
     extent = _ink_x_extent(black, range(33, 62), inner)
     assert extent is not None, "expected hero ink"
     left, right = extent
     assert left >= 14, f"hero overflows left budget: {left}"
     assert right <= WIDTH - 14, f"hero overflows right budget: {right}"
+
+
+def test_format_modes_produce_distinct_planes():
+    """Each age_format must visibly change the black plane; otherwise a
+    regression that ignored the new field would slip past the per-format
+    smoke checks below."""
+    planes = {
+        fmt: render("Lily", AGE, BORN, age_format=fmt)[0].tobytes()
+        for fmt in ("extended", "days", "hours")
+    }
+    assert planes["extended"] != planes["days"]
+    assert planes["days"] != planes["hours"]
+    assert planes["extended"] != planes["hours"]
+
+
+def test_format_days_short_circuits_zero_to_newborn():
+    """In days mode, total_days=0 must render "newborn" rather than
+    "0 days". We pin this by rendering the same AgeBreakdown in days
+    mode and in hours mode (with the total_hours also 0): both fall
+    into the newborn branch, so their hero text — and thus the black
+    plane below the header — should be identical."""
+    fresh = AgeBreakdown(0, 0, 0, 0, total_days=0, total_hours=0)
+    days_black, _ = render("Lily", fresh, BORN, age_format="days")
+    hours_black, _ = render("Lily", fresh, BORN, age_format="hours")
+    assert days_black.tobytes() == hours_black.tobytes()
+
+
+def test_format_days_uses_total_days_not_calendar_days():
+    """Hero text in days mode must reflect total_days (e.g. 1324) rather
+    than the calendar `days` field (15). If render() reads age.days by
+    mistake, a small total_days input renders the same as a small
+    calendar-days input — pin the distinction."""
+    big = AgeBreakdown(0, 0, 15, 0, total_days=1324, total_hours=31780)
+    small = AgeBreakdown(0, 0, 15, 0, total_days=15, total_hours=360)
+    big_black, _ = render("Lily", big, BORN, age_format="days")
+    small_black, _ = render("Lily", small, BORN, age_format="days")
+    assert big_black.tobytes() != small_black.tobytes()
 
 
 def test_long_hero_would_overflow_at_default_size():

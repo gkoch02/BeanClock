@@ -14,9 +14,11 @@ class Config:
     sleep_hour: int
     flip: bool
     accent: str
+    age_format: str
 
 
 VALID_ACCENTS = {"heart", "star", "balloon"}
+VALID_FORMATS = {"extended", "days", "hours"}
 
 
 def load(path: Path) -> Config:
@@ -45,6 +47,9 @@ def load(path: Path) -> Config:
     accent = str(display.get("accent", "heart")).lower()
     if accent not in VALID_ACCENTS:
         raise ValueError(f"display.accent must be one of {sorted(VALID_ACCENTS)}")
+    age_format = str(display.get("format", "extended")).lower()
+    if age_format not in VALID_FORMATS:
+        raise ValueError(f"display.format must be one of {sorted(VALID_FORMATS)}")
 
     return Config(
         name=name,
@@ -53,4 +58,5 @@ def load(path: Path) -> Config:
         sleep_hour=sleep_hour,
         flip=flip,
         accent=accent,
+        age_format=age_format,
     )

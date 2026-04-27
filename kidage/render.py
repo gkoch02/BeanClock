@@ -2,11 +2,21 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+from typing import Protocol
 
 from PIL import Image, ImageDraw, ImageFont
 
 from kidage.age import AgeBreakdown, pluralize
 
+
+class AccentFn(Protocol):
+    def __call__(
+        self,
+        draw: ImageDraw.ImageDraw,
+        cx: int,
+        cy: int,
+        size: int = ...,
+    ) -> None: ...
 
 WIDTH = 250
 HEIGHT = 122
@@ -16,7 +26,7 @@ FONT_PATH = Path(__file__).resolve().parent.parent / "fonts" / "Fredoka.ttf"
 
 def _font(size: int, weight: str = "Regular") -> ImageFont.FreeTypeFont:
     f = ImageFont.truetype(str(FONT_PATH), size=size)
-    f.set_variation_by_name(weight)
+    f.set_variation_by_name(weight)  # type: ignore[no-untyped-call]
     return f
 
 
@@ -75,7 +85,11 @@ def _draw_balloon(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int = 10) -
     draw.line((cx, cy + size + 1, cx, cy + size + 5), fill=0, width=1)
 
 
-_ACCENTS = {"heart": _draw_heart, "star": _draw_star, "balloon": _draw_balloon}
+_ACCENTS: dict[str, AccentFn] = {
+    "heart": _draw_heart,
+    "star": _draw_star,
+    "balloon": _draw_balloon,
+}
 
 
 # Frame geometry. The outer black line sits at the panel edge; the red beads
@@ -85,6 +99,12 @@ FRAME_OUTER = 1            # 1px inset for the rounded black line
 FRAME_BEAD_INSET = 5       # bead centers sit FRAME_BEAD_INSET px from the edge
 FRAME_BEAD_SPACING = 10
 FRAME_PAD = 9              # min y-distance from text to the panel edge
+
+# Hero baseline. Two-line mode (extended) sits the hero high to leave room for
+# the sub line; one-line mode (days/hours) centers it vertically: the hero is
+# 28pt, so (HEIGHT - 28) // 2 == 47.
+HERO_Y_TWO_LINE = 33
+HERO_Y_ONE_LINE = 47
 
 
 def _draw_bead(draw: ImageDraw.ImageDraw, cx: int, cy: int) -> None:
@@ -99,7 +119,7 @@ def _draw_frame(
     bd: ImageDraw.ImageDraw,
     rd: ImageDraw.ImageDraw,
     accent: str,
-    accent_fn,
+    accent_fn: AccentFn,
 ) -> None:
     # Outer rounded black hairline.
     bd.rounded_rectangle(
@@ -141,6 +161,7 @@ def render(
     born_at: datetime,
     accent: str = "heart",
     flip: bool = False,
+    age_format: str = "extended",
 ) -> tuple[Image.Image, Image.Image]:
     black = Image.new("1", (WIDTH, HEIGHT), 1)
     red = Image.new("1", (WIDTH, HEIGHT), 1)
@@ -162,17 +183,29 @@ def render(
     accent_fn(rd, hx - 14, accent_y)
     accent_fn(rd, hx + hw + 14, accent_y)
 
-    hero = _hero_line(age)
+    if age_format == "days":
+        hero = pluralize(age.total_days, "day") if age.total_days else "newborn"
+        hero_y = HERO_Y_ONE_LINE
+        sub = None
+    elif age_format == "hours":
+        hero = pluralize(age.total_hours, "hour") if age.total_hours else "newborn"
+        hero_y = HERO_Y_ONE_LINE
+        sub = None
+    else:
+        hero = _hero_line(age)
+        hero_y = HERO_Y_TWO_LINE
+        sub = _sub_line(age)
+
     hero_size = 28
     hero_font = _font(hero_size, "Bold")
     while _text_width(bd, hero, hero_font) > WIDTH - 28 and hero_size > 16:
         hero_size -= 2
         hero_font = _font(hero_size, "Bold")
-    _draw_centered(bd, 33, hero, hero_font)
+    _draw_centered(bd, hero_y, hero, hero_font)
 
-    sub = _sub_line(age)
-    sub_font = _font(17, "Medium")
-    _draw_centered(bd, 68, sub, sub_font)
+    if sub is not None:
+        sub_font = _font(17, "Medium")
+        _draw_centered(bd, 68, sub, sub_font)
 
     footer_font = _font(13, "Regular")
     footer = f"since {_format_birthday(born_at)}"
