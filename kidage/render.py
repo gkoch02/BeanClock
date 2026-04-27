@@ -91,9 +91,14 @@ def _draw_bead(draw: ImageDraw.ImageDraw, cx: int, cy: int) -> None:
     draw.ellipse((cx - 1, cy - 1, cx + 1, cy + 1), fill=0)
 
 
+def _draw_corner_dot(draw: ImageDraw.ImageDraw, cx: int, cy: int) -> None:
+    draw.ellipse((cx - 2, cy - 2, cx + 2, cy + 2), fill=0)
+
+
 def _draw_frame(
     bd: ImageDraw.ImageDraw,
     rd: ImageDraw.ImageDraw,
+    accent: str,
     accent_fn,
 ) -> None:
     # Outer rounded black hairline.
@@ -118,9 +123,12 @@ def _draw_frame(
         _draw_bead(rd, left, y)
         _draw_bead(rd, right, y)
 
-    # Tiny accents in each corner, on the red plane.
-    for cx, cy in ((9, 9), (WIDTH - 10, 9), (9, HEIGHT - 10), (WIDTH - 10, HEIGHT - 10)):
-        accent_fn(rd, cx, cy, size=4)
+    corners = ((9, 9), (WIDTH - 10, 9), (9, HEIGHT - 10), (WIDTH - 10, HEIGHT - 10))
+    for cx, cy in corners:
+        if accent == "heart":
+            _draw_corner_dot(rd, cx, cy)
+        else:
+            accent_fn(rd, cx, cy, size=4)
 
 
 def _format_birthday(born_at: datetime) -> str:
@@ -141,7 +149,7 @@ def render(
 
     accent_fn = _ACCENTS.get(accent, _draw_heart)
 
-    _draw_frame(bd, rd, accent_fn)
+    _draw_frame(bd, rd, accent, accent_fn)
 
     header_font = _font(20, "Medium")
     header = f"{name} is"
@@ -172,7 +180,8 @@ def render(
     fx = (WIDTH - fw) // 2
     fy = HEIGHT - FRAME_PAD - 13
     rd.text((fx, fy), footer, font=footer_font, fill=0)
-    accent_fn(rd, fx - 12, fy + 8, size=7)
+    if accent != "heart":
+        accent_fn(rd, fx - 12, fy + 8, size=7)
 
     if flip:
         black = black.rotate(180)
