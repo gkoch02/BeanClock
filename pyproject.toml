@@ -20,6 +20,9 @@ pi = [
 dev = [
     "pytest>=8",
     "ruff>=0.6",
+    "mypy>=1.10",
+    "types-Pillow",
+    "types-python-dateutil",
 ]
 
 [project.scripts]
@@ -42,3 +45,16 @@ extend-exclude = ["vendor"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["kidage"]
+
+# The vendored Waveshare driver is verbatim third-party code; don't typecheck it
+# or chase its untyped RPi.GPIO/spidev imports. kidage/display.py imports it
+# lazily inside show().
+[[tool.mypy.overrides]]
+module = "vendor.*"
+follow_imports = "skip"
+ignore_missing_imports = true

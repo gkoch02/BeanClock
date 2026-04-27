@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
 from kidage.age import AgeBreakdown, pluralize
+
+AccentFn = Callable[..., None]
 
 WIDTH = 250
 HEIGHT = 122
@@ -15,7 +18,7 @@ FONT_PATH = Path(__file__).resolve().parent.parent / "fonts" / "Fredoka.ttf"
 
 def _font(size: int, weight: str = "Regular") -> ImageFont.FreeTypeFont:
     f = ImageFont.truetype(str(FONT_PATH), size=size)
-    f.set_variation_by_name(weight)
+    f.set_variation_by_name(weight)  # type: ignore[no-untyped-call]
     return f
 
 
@@ -98,7 +101,7 @@ def _draw_frame(
     bd: ImageDraw.ImageDraw,
     rd: ImageDraw.ImageDraw,
     accent: str,
-    accent_fn,
+    accent_fn: AccentFn,
 ) -> None:
     # Outer rounded black hairline.
     bd.rounded_rectangle(
