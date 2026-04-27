@@ -1,0 +1,15 @@
+[Unit]
+Description=Render and push kid age to e-paper
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=KIDAGE_CONFIG=/etc/kidage/config.toml
+Environment=KIDAGE_STATE_DIR=/var/lib/kidage
+WorkingDirectory=/opt/kidage
+ExecStart=/opt/kidage/.venv/bin/python -m kidage
+User=kidage
+SupplementaryGroups=spi gpio
+StateDirectory=kidage
+StandardOutput=journal
+StandardError=journal

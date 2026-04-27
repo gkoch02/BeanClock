@@ -1,0 +1,11 @@
+[Unit]
+Description=Update kid age display every hour during waking hours
+
+[Timer]
+OnCalendar=*-*-* 07..21:00:00
+Persistent=true
+AccuracySec=1min
+Unit=kidage.service
+
+[Install]
+WantedBy=timers.target

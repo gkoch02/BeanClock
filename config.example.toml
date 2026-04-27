@@ -1,0 +1,11 @@
+[kid]
+name = "Lily"
+born_at = 2022-09-12T03:47:00-07:00
+
+[schedule]
+wake_hour = 7
+sleep_hour = 21
+
+[display]
+flip = false
+accent = "heart"

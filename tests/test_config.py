@@ -1,0 +1,82 @@
+from datetime import timezone, timedelta
+from pathlib import Path
+
+import pytest
+
+from kidage.config import load
+
+
+def _write(tmp_path: Path, body: str) -> Path:
+    p = tmp_path / "config.toml"
+    p.write_text(body)
+    return p
+
+
+def test_load_minimal(tmp_path):
+    cfg = load(_write(tmp_path, """
+[kid]
+name = "Lily"
+born_at = 2022-09-12T03:47:00-07:00
+"""))
+    assert cfg.name == "Lily"
+    assert cfg.born_at.utcoffset() == timedelta(hours=-7)
+    assert cfg.wake_hour == 7
+    assert cfg.sleep_hour == 21
+    assert cfg.flip is False
+    assert cfg.accent == "heart"
+
+
+def test_load_full(tmp_path):
+    cfg = load(_write(tmp_path, """
+[kid]
+name = "Maximilian"
+born_at = 2024-01-15T08:00:00+00:00
+
+[schedule]
+wake_hour = 6
+sleep_hour = 22
+
+[display]
+flip = true
+accent = "balloon"
+"""))
+    assert cfg.name == "Maximilian"
+    assert cfg.wake_hour == 6
+    assert cfg.sleep_hour == 22
+    assert cfg.flip is True
+    assert cfg.accent == "balloon"
+
+
+def test_rejects_naive_born_at(tmp_path):
+    p = _write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00
+""")
+    with pytest.raises(ValueError):
+        load(p)
+
+
+def test_rejects_bad_schedule(tmp_path):
+    p = _write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00+00:00
+[schedule]
+wake_hour = 22
+sleep_hour = 6
+""")
+    with pytest.raises(ValueError):
+        load(p)
+
+
+def test_rejects_unknown_accent(tmp_path):
+    p = _write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00+00:00
+[display]
+accent = "unicorn"
+""")
+    with pytest.raises(ValueError):
+        load(p)

@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kidage"
+version = "0.1.0"
+description = "Tracks how old a kiddo is on a Waveshare 2.13\" b/r e-paper display."
+requires-python = ">=3.11"
+dependencies = [
+    "Pillow>=10",
+    "python-dateutil>=2.9",
+]
+
+[project.optional-dependencies]
+pi = [
+    "RPi.GPIO>=0.7",
+    "spidev>=3.6",
+]
+dev = [
+    "pytest>=8",
+]
+
+[project.scripts]
+kidage = "kidage.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["kidage*", "vendor*"]
+
+[tool.setuptools.package-data]
+kidage = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
