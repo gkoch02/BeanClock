@@ -85,6 +85,16 @@ dots in the frame corners (not small hearts) and omits the footer accent —
 small hearts lost their shape at 4 px and the row reads cleaner without
 one. See the `accent == "heart"` branches in `_draw_frame` and `render`.
 
+**Hero layout depends on `age_format`.** The `format` config knob
+(`extended` / `days` / `hours`) reaches `render()` as `age_format` and
+picks between two hero baselines: `HERO_Y_TWO_LINE = 33` for `extended`
+(years/months hero with a days/hours sub line at `y=68`) and
+`HERO_Y_ONE_LINE = 47` for the single-total `days` / `hours` modes
+(centered vertically for the 28pt hero). The hero font auto-shrinks in
+2pt steps down to 16pt if the string would overflow `WIDTH - 28`; preserve
+that shrink loop when changing strings, since "31756 hours" already lands
+near the limit.
+
 ## Configuration
 
 `config.example.toml` is the canonical schema. The installer copies it to
@@ -110,7 +120,14 @@ fix is needed, wrap it in `kidage/display.py`.
 
 ## Adding tests
 
-Tests live under `tests/` and never import `kidage.display` (it would pull
-in the hardware libs). Use `compose_preview(black, red)` to get an RGB
-image, or check `image.tobytes()` for inked pixels — `Image.getdata()` is
-deprecated in Pillow 14.
+Tests live under `tests/`. Render-side tests import `kidage.render`
+directly, which is hardware-free. `tests/test_display.py` does import
+`kidage.display`, but only after stubbing `vendor.waveshare_epd` in
+`sys.modules` — the lazy `from vendor.waveshare_epd import epd2in13b_V4`
+inside `show()` then resolves to the stub, so `RPi.GPIO` / `spidev` are
+never loaded. Reuse the `monkeypatch.setitem(sys.modules, …)` fixture in
+that file if you need to exercise `display.show` again.
+
+Use `compose_preview(black, red)` to get an RGB image, or check
+`image.tobytes()` for inked pixels — `Image.getdata()` is deprecated in
+Pillow 14.

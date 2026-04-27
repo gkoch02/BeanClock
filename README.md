@@ -69,8 +69,9 @@ wake_hour  = 7    # inclusive, local time of first daily update
 sleep_hour = 21   # inclusive, local time of last daily update
 
 [display]
-flip   = false    # rotate 180° if the ribbon comes out the other side
-accent = "heart"  # heart | star | balloon
+flip   = false      # rotate 180° if the ribbon comes out the other side
+accent = "heart"    # heart | star | balloon
+format = "extended" # extended (years/months + days/hours) | days | hours
 ```
 
 Edit `/etc/kidage/config.toml` and run `sudo systemctl start kidage.service`
@@ -84,7 +85,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e '.[dev]'
 
-pytest                                       # 18 tests, no panel needed
+pytest                                       # 47 tests, no panel needed
 python -m kidage --config config.example.toml --preview /tmp/p.png
 xdg-open /tmp/p.png                          # eyeball the layout
 ```
