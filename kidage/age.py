@@ -12,8 +12,8 @@ class AgeBreakdown:
     months: int
     days: int
     hours: int
-    total_days: int = 0
-    total_hours: int = 0
+    total_days: int
+    total_hours: int
 
 
 def compute(born_at: datetime, now: datetime) -> AgeBreakdown:

@@ -1,14 +1,22 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
+from typing import Protocol
 
 from PIL import Image, ImageDraw, ImageFont
 
 from kidage.age import AgeBreakdown, pluralize
 
-AccentFn = Callable[..., None]
+
+class AccentFn(Protocol):
+    def __call__(
+        self,
+        draw: ImageDraw.ImageDraw,
+        cx: int,
+        cy: int,
+        size: int = ...,
+    ) -> None: ...
 
 WIDTH = 250
 HEIGHT = 122
@@ -77,7 +85,11 @@ def _draw_balloon(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int = 10) -
     draw.line((cx, cy + size + 1, cx, cy + size + 5), fill=0, width=1)
 
 
-_ACCENTS = {"heart": _draw_heart, "star": _draw_star, "balloon": _draw_balloon}
+_ACCENTS: dict[str, AccentFn] = {
+    "heart": _draw_heart,
+    "star": _draw_star,
+    "balloon": _draw_balloon,
+}
 
 
 # Frame geometry. The outer black line sits at the panel edge; the red beads
@@ -87,6 +99,12 @@ FRAME_OUTER = 1            # 1px inset for the rounded black line
 FRAME_BEAD_INSET = 5       # bead centers sit FRAME_BEAD_INSET px from the edge
 FRAME_BEAD_SPACING = 10
 FRAME_PAD = 9              # min y-distance from text to the panel edge
+
+# Hero baseline. Two-line mode (extended) sits the hero high to leave room for
+# the sub line; one-line mode (days/hours) centers it vertically: the hero is
+# 28pt, so (HEIGHT - 28) // 2 == 47.
+HERO_Y_TWO_LINE = 33
+HERO_Y_ONE_LINE = 47
 
 
 def _draw_bead(draw: ImageDraw.ImageDraw, cx: int, cy: int) -> None:
@@ -166,16 +184,16 @@ def render(
     accent_fn(rd, hx + hw + 14, accent_y)
 
     if age_format == "days":
-        hero = pluralize(age.total_days, "day")
-        hero_y = 47
+        hero = pluralize(age.total_days, "day") if age.total_days else "newborn"
+        hero_y = HERO_Y_ONE_LINE
         sub = None
     elif age_format == "hours":
-        hero = pluralize(age.total_hours, "hour")
-        hero_y = 47
+        hero = pluralize(age.total_hours, "hour") if age.total_hours else "newborn"
+        hero_y = HERO_Y_ONE_LINE
         sub = None
     else:
         hero = _hero_line(age)
-        hero_y = 33
+        hero_y = HERO_Y_TWO_LINE
         sub = _sub_line(age)
 
     hero_size = 28
