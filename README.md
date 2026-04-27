@@ -24,6 +24,10 @@ the age is spelled out. A spread:
   time), driven by a `systemd` timer that fires every hour and a wake-window
   check in the script itself — edit `/etc/kidage/config.toml` to change the
   hours, no timer reload needed.
+- Special-day takeovers: on the kid's birthday the hero row reads "Happy Nth
+  Birthday!", and on configurable day-count milestones (default 100 / 500 /
+  1000 / 2000 / 5000) it reads "N days!" — the standard "Y years M months"
+  phrasing slides to the sub line.
 - Single TOML config file for the kid's name, birth datetime+timezone, wake
   window, and accent glyph.
 - Once-a-day full clear to suppress ghosting; the other ~14 daily refreshes
@@ -80,7 +84,16 @@ sleep_hour = 21   # inclusive, local time of last daily update
 flip   = false      # rotate 180° if the ribbon comes out the other side
 accent = "heart"    # heart | star | balloon
 format = "extended" # extended (years/months + days/hours) | days | hours
+
+[special_days]
+birthday   = true                          # hero swaps to "Happy Nth Birthday!"
+milestones = [100, 500, 1000, 2000, 5000]  # hero swaps to "N days!"; [] disables
 ```
+
+On a matching day the hero row is replaced and the standard age phrasing
+slides to the sub line, regardless of `display.format`. Feb 29 births
+celebrate Feb 28 in non-leap years; if a milestone happens to fall on the
+birthday, the birthday wins.
 
 Edit `/etc/kidage/config.toml` and run `sudo systemctl start kidage.service`
 to push the change to the panel immediately (the manual refresh still
@@ -95,7 +108,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e '.[dev]'
 
-pytest                                       # 47 tests, no panel needed
+pytest                                       # 76 tests, no panel needed
 python -m kidage --config config.example.toml --preview /tmp/p.png
 xdg-open /tmp/p.png                          # eyeball the layout
 ```
@@ -111,6 +124,7 @@ kidage/                       # package
   config.py                   # TOML loader + validation
   render.py                   # Pillow → (black plane, red plane)
   display.py                  # thin wrapper around the vendored driver
+  special.py                  # birthday + milestone detection
   __main__.py                 # entrypoint: load → render → display | --preview
 vendor/waveshare_epd/         # vendored from waveshareteam/e-Paper
 fonts/Fredoka.ttf             # SIL OFL variable font
