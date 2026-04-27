@@ -78,6 +78,51 @@ def _draw_balloon(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int = 10) -
 _ACCENTS = {"heart": _draw_heart, "star": _draw_star, "balloon": _draw_balloon}
 
 
+# Frame geometry. The outer black line sits at the panel edge; the red beads
+# trim the inside of that line. The text region must clear FRAME_PAD on every
+# side so it doesn't collide with the trim.
+FRAME_OUTER = 1            # 1px inset for the rounded black line
+FRAME_BEAD_INSET = 5       # bead centers sit FRAME_BEAD_INSET px from the edge
+FRAME_BEAD_SPACING = 10
+FRAME_PAD = 9              # min y-distance from text to the panel edge
+
+
+def _draw_bead(draw: ImageDraw.ImageDraw, cx: int, cy: int) -> None:
+    draw.ellipse((cx - 1, cy - 1, cx + 1, cy + 1), fill=0)
+
+
+def _draw_frame(
+    bd: ImageDraw.ImageDraw,
+    rd: ImageDraw.ImageDraw,
+    accent_fn,
+) -> None:
+    # Outer rounded black hairline.
+    bd.rounded_rectangle(
+        (FRAME_OUTER, FRAME_OUTER, WIDTH - 1 - FRAME_OUTER, HEIGHT - 1 - FRAME_OUTER),
+        radius=8,
+        outline=0,
+        width=1,
+    )
+
+    # Red beads, evenly spaced along each inside edge, skipping the corners
+    # so they don't clash with the rounded outer line or the corner accents.
+    inset = FRAME_BEAD_INSET
+    left, right = inset, WIDTH - 1 - inset
+    top, bottom = inset, HEIGHT - 1 - inset
+    corner_skip = 14
+
+    for x in range(left + corner_skip, right - corner_skip + 1, FRAME_BEAD_SPACING):
+        _draw_bead(rd, x, top)
+        _draw_bead(rd, x, bottom)
+    for y in range(top + corner_skip, bottom - corner_skip + 1, FRAME_BEAD_SPACING):
+        _draw_bead(rd, left, y)
+        _draw_bead(rd, right, y)
+
+    # Tiny accents in each corner, on the red plane.
+    for cx, cy in ((9, 9), (WIDTH - 10, 9), (9, HEIGHT - 10), (WIDTH - 10, HEIGHT - 10)):
+        accent_fn(rd, cx, cy, size=4)
+
+
 def _format_birthday(born_at: datetime) -> str:
     return born_at.strftime("%b ") + str(born_at.day) + born_at.strftime(", %Y")
 
@@ -96,11 +141,13 @@ def render(
 
     accent_fn = _ACCENTS.get(accent, _draw_heart)
 
+    _draw_frame(bd, rd, accent_fn)
+
     header_font = _font(20, "Medium")
     header = f"{name} is"
     hw = _text_width(rd, header, header_font)
     hx = (WIDTH - hw) // 2
-    hy = 6
+    hy = FRAME_PAD
     rd.text((hx, hy), header, font=header_font, fill=0)
 
     accent_y = hy + 10
@@ -108,22 +155,22 @@ def render(
     accent_fn(rd, hx + hw + 14, accent_y)
 
     hero = _hero_line(age)
-    hero_size = 30
+    hero_size = 28
     hero_font = _font(hero_size, "Bold")
-    while _text_width(bd, hero, hero_font) > WIDTH - 12 and hero_size > 18:
+    while _text_width(bd, hero, hero_font) > WIDTH - 28 and hero_size > 16:
         hero_size -= 2
         hero_font = _font(hero_size, "Bold")
-    _draw_centered(bd, 32, hero, hero_font)
+    _draw_centered(bd, 33, hero, hero_font)
 
     sub = _sub_line(age)
-    sub_font = _font(18, "Medium")
-    _draw_centered(bd, 70, sub, sub_font)
+    sub_font = _font(17, "Medium")
+    _draw_centered(bd, 68, sub, sub_font)
 
     footer_font = _font(13, "Regular")
     footer = f"since {_format_birthday(born_at)}"
     fw = _text_width(rd, footer, footer_font)
     fx = (WIDTH - fw) // 2
-    fy = HEIGHT - 18
+    fy = HEIGHT - FRAME_PAD - 13
     rd.text((fx, fy), footer, font=footer_font, fill=0)
     accent_fn(rd, fx - 12, fy + 8, size=7)
 
