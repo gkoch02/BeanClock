@@ -65,7 +65,7 @@ the tri-color panel's full inversion flicker. To force a clear on the next
 run, delete that file. The state directory is overridable via
 `KIDAGE_STATE_DIR` (the `systemd` unit sets it via `StateDirectory=kidage`).
 
-**Variable font.** `fonts/Fredoka.ttf` is a single variable TTF with weight
+**Variable font.** `kidage/fonts/Fredoka.ttf` is a single variable TTF with weight
 and width axes. `render._font(size, weight)` calls
 `set_variation_by_name(weight)` (`Light` / `Regular` / `Medium` / `SemiBold`
 / `Bold`); always go through this helper rather than constructing

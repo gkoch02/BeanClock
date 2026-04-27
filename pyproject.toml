@@ -33,7 +33,7 @@ where = ["."]
 include = ["kidage*", "vendor*"]
 
 [tool.setuptools.package-data]
-kidage = ["py.typed"]
+kidage = ["py.typed", "fonts/Fredoka.ttf", "fonts/OFL.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
