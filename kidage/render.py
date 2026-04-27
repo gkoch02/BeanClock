@@ -162,6 +162,7 @@ def render(
     accent: str = "heart",
     flip: bool = False,
     age_format: str = "extended",
+    special: str | None = None,
 ) -> tuple[Image.Image, Image.Image]:
     black = Image.new("1", (WIDTH, HEIGHT), 1)
     red = Image.new("1", (WIDTH, HEIGHT), 1)
@@ -183,7 +184,15 @@ def render(
     accent_fn(rd, hx - 14, accent_y)
     accent_fn(rd, hx + hw + 14, accent_y)
 
-    if age_format == "days":
+    if special is not None:
+        # Special-day mode (birthday, milestone, ...) hijacks the hero row and
+        # demotes the standard "Y years M months" phrasing to the sub line,
+        # regardless of age_format. The two-line baseline is reused so the sub
+        # line lands at its usual y=68.
+        hero = special
+        hero_y = HERO_Y_TWO_LINE
+        sub = _hero_line(age)
+    elif age_format == "days":
         hero = pluralize(age.total_days, "day") if age.total_days else "newborn"
         hero_y = HERO_Y_ONE_LINE
         sub = None

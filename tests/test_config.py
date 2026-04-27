@@ -113,3 +113,79 @@ format = "weeks"
 """)
     with pytest.raises(ValueError):
         load(p)
+
+
+def test_special_days_defaults(tmp_path):
+    cfg = load(_write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00+00:00
+"""))
+    assert cfg.birthday is True
+    assert cfg.milestones == (100, 500, 1000, 2000, 5000)
+
+
+def test_special_days_custom(tmp_path):
+    cfg = load(_write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00+00:00
+
+[special_days]
+birthday = false
+milestones = [42, 7, 7, 100]
+"""))
+    assert cfg.birthday is False
+    # Loader sorts and dedupes so render-side checks don't have to.
+    assert cfg.milestones == (7, 42, 100)
+
+
+def test_special_days_empty_milestones_allowed(tmp_path):
+    cfg = load(_write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00+00:00
+
+[special_days]
+milestones = []
+"""))
+    assert cfg.milestones == ()
+
+
+def test_rejects_non_positive_milestone(tmp_path):
+    p = _write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00+00:00
+
+[special_days]
+milestones = [100, 0, 500]
+""")
+    with pytest.raises(ValueError):
+        load(p)
+
+
+def test_rejects_non_int_milestone(tmp_path):
+    p = _write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00+00:00
+
+[special_days]
+milestones = [100, "many", 500]
+""")
+    with pytest.raises(ValueError):
+        load(p)
+
+
+def test_rejects_non_list_milestones(tmp_path):
+    p = _write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00+00:00
+
+[special_days]
+milestones = 1000
+""")
+    with pytest.raises(ValueError):
+        load(p)
