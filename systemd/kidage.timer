@@ -2,7 +2,10 @@
 Description=Update kid age display every hour during waking hours
 
 [Timer]
-OnCalendar=*-*-* 07..21:00:00
+# Fire hourly, all day. The script reads wake_hour/sleep_hour from
+# /etc/kidage/config.toml and exits early outside that window, so the TOML
+# file is the one place to edit the schedule (no timer reload needed).
+OnCalendar=*-*-* *:00:00
 Persistent=true
 AccuracySec=1min
 Unit=kidage.service

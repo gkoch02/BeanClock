@@ -7,13 +7,23 @@ black/white/red e-paper (V4) shows how old your kiddo is, broken down into
 years / months / days / hours. It refreshes once an hour during waking hours
 and rests overnight.
 
-![preview](docs/preview.png)
+![preview — heart accent, extended format](docs/preview.png)
+
+The `display.accent` and `display.format` knobs change the border trim and how
+the age is spelled out. A spread:
+
+| Star corners, total days | Balloon corners, total hours |
+| --- | --- |
+| ![star accent, days format](docs/preview-star-days.png) | ![balloon accent, hours format](docs/preview-balloon-hours.png) |
 
 ## Features
 
 - Beautiful, legible, playful layout — rounded **Fredoka** type, two-color
   accents (heart / star / balloon), no fussy clipart.
-- Hourly refresh from 07:00–21:00 (configurable), driven by a `systemd` timer.
+- Hourly refresh during a configurable wake window (default 07:00–21:00 local
+  time), driven by a `systemd` timer that fires every hour and a wake-window
+  check in the script itself — edit `/etc/kidage/config.toml` to change the
+  hours, no timer reload needed.
 - Single TOML config file for the kid's name, birth datetime+timezone, wake
   window, and accent glyph.
 - Once-a-day full clear to suppress ghosting; the other ~14 daily refreshes
@@ -37,11 +47,16 @@ On a fresh Pi OS Lite SD card:
 ```bash
 git clone https://github.com/<you>/jubilant-tribble.git
 cd jubilant-tribble
+sudo timedatectl set-timezone America/Los_Angeles  # use your tz (zoneinfo, not an offset)
 sudo bash scripts/install.sh
 sudo $EDITOR /etc/kidage/config.toml         # set name + birth datetime
 sudo systemctl start kidage.service          # first refresh now
 systemctl list-timers kidage.timer           # confirm next hourly fire
 ```
+
+`wake_hour` and `sleep_hour` are interpreted against the Pi's system
+timezone, so it must be a real zoneinfo (e.g. `America/Los_Angeles`) for
+the wake window to track DST correctly.
 
 The installer creates `kidage` system user, builds a virtualenv at
 `/opt/kidage/.venv`, copies the `systemd` units, enables SPI, and starts the
@@ -62,13 +77,16 @@ wake_hour  = 7    # inclusive, local time of first daily update
 sleep_hour = 21   # inclusive, local time of last daily update
 
 [display]
-flip   = false    # rotate 180° if the ribbon comes out the other side
-accent = "heart"  # heart | star | balloon
+flip   = false      # rotate 180° if the ribbon comes out the other side
+accent = "heart"    # heart | star | balloon
+format = "extended" # extended (years/months + days/hours) | days | hours
 ```
 
 Edit `/etc/kidage/config.toml` and run `sudo systemctl start kidage.service`
-to push the change to the panel immediately. The next scheduled refresh will
-also pick up the change.
+to push the change to the panel immediately (the manual refresh still
+respects `wake_hour`/`sleep_hour`, so widen those first if you're testing
+outside waking hours). The next scheduled refresh will also pick up the
+change.
 
 ## Development without hardware
 
@@ -77,7 +95,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e '.[dev]'
 
-pytest                                       # 18 tests, no panel needed
+pytest                                       # 47 tests, no panel needed
 python -m kidage --config config.example.toml --preview /tmp/p.png
 xdg-open /tmp/p.png                          # eyeball the layout
 ```
@@ -110,6 +128,11 @@ tests/                        # pure-Python (no panel)
 - **Ghosting** — the daily clear at the first wake-hour fire wipes residual
   burn-in. Force one with `sudo rm /var/lib/kidage/last-clear && sudo
   systemctl start kidage.service`.
+- **Wake window fires an hour late after a DST change** — the Pi's system
+  timezone is set to a fixed offset (e.g. `Etc/GMT+7`) instead of a
+  zoneinfo. Run `timedatectl status` to check, then
+  `sudo timedatectl set-timezone America/Los_Angeles` (or your IANA zone)
+  so the OS handles DST.
 
 ## Licenses
 

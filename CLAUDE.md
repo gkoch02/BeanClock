@@ -85,6 +85,16 @@ dots in the frame corners (not small hearts) and omits the footer accent —
 small hearts lost their shape at 4 px and the row reads cleaner without
 one. See the `accent == "heart"` branches in `_draw_frame` and `render`.
 
+**Hero layout depends on `age_format`.** The `format` config knob
+(`extended` / `days` / `hours`) reaches `render()` as `age_format` and
+picks between two hero baselines: `HERO_Y_TWO_LINE = 33` for `extended`
+(years/months hero with a days/hours sub line at `y=68`) and
+`HERO_Y_ONE_LINE = 47` for the single-total `days` / `hours` modes
+(centered vertically for the 28pt hero). The hero font auto-shrinks in
+2pt steps down to 16pt if the string would overflow `WIDTH - 28`; preserve
+that shrink loop when changing strings, since "31756 hours" already lands
+near the limit.
+
 ## Configuration
 
 `config.example.toml` is the canonical schema. The installer copies it to
@@ -95,12 +105,31 @@ and assumes the offset matches the family's wall clock.
 
 ## Scheduling
 
-`systemd/kidage.timer` uses `OnCalendar=*-*-* 07..21:00:00` with
-`Persistent=true`. The persistent flag means a Pi that boots mid-day
-catches up exactly once instead of waiting for the next top of the hour;
-keep both flags or hourly catch-up regressions become hard to spot.
-`AccuracySec=1min` lets `systemd` batch with other timers, which matters
-on a Zero 2 because waking SPI takes a non-trivial fraction of a watt.
+`systemd/kidage.timer` fires every hour, all day (`OnCalendar=*-*-*
+*:00:00`). The wake-window enforcement lives in `kidage.__main__`: it
+compares `now.hour` to `cfg.wake_hour`/`cfg.sleep_hour` (both inclusive)
+and exits 0 without touching the panel when outside the window. This
+keeps `/etc/kidage/config.toml` as the single source of truth for the
+schedule — editing the timer is no longer required to change waking
+hours. `--preview` deliberately bypasses the window so layout work works
+at any hour.
+
+**`now` must come from the system timezone, not `cfg.born_at.tzinfo`.**
+The TOML offset is whatever was in effect when the birth was saved
+(e.g. `-07:00` for a summer birth), which is a fixed offset, not a
+zoneinfo. Comparing `now.hour` against config hours using that offset
+silently drifts by an hour across DST in observing regions. The
+entrypoint uses `datetime.now().astimezone()` so the Pi's zoneinfo (set
+via `timedatectl set-timezone`) drives wall-clock semantics; don't
+"simplify" that back to `tz=cfg.born_at.tzinfo`.
+
+`Persistent=true` means a Pi that boots mid-day catches up exactly once
+instead of waiting for the next top of the hour; keep that flag or
+hourly catch-up regressions become hard to spot. `AccuracySec=1min` lets
+`systemd` batch with other timers, which matters on a Zero 2 because
+waking SPI takes a non-trivial fraction of a watt — so does spawning
+Python every hour for the no-op slots, but the cost is dwarfed by the
+SPI-active hours and the simpler "edit one TOML file" UX wins.
 
 ## Vendored code
 
@@ -110,7 +139,14 @@ fix is needed, wrap it in `kidage/display.py`.
 
 ## Adding tests
 
-Tests live under `tests/` and never import `kidage.display` (it would pull
-in the hardware libs). Use `compose_preview(black, red)` to get an RGB
-image, or check `image.tobytes()` for inked pixels — `Image.getdata()` is
-deprecated in Pillow 14.
+Tests live under `tests/`. Render-side tests import `kidage.render`
+directly, which is hardware-free. `tests/test_display.py` does import
+`kidage.display`, but only after stubbing `vendor.waveshare_epd` in
+`sys.modules` — the lazy `from vendor.waveshare_epd import epd2in13b_V4`
+inside `show()` then resolves to the stub, so `RPi.GPIO` / `spidev` are
+never loaded. Reuse the `monkeypatch.setitem(sys.modules, …)` fixture in
+that file if you need to exercise `display.show` again.
+
+Use `compose_preview(black, red)` to get an RGB image, or check
+`image.tobytes()` for inked pixels — `Image.getdata()` is deprecated in
+Pillow 14.
