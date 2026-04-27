@@ -114,6 +114,15 @@ schedule — editing the timer is no longer required to change waking
 hours. `--preview` deliberately bypasses the window so layout work works
 at any hour.
 
+**`now` must come from the system timezone, not `cfg.born_at.tzinfo`.**
+The TOML offset is whatever was in effect when the birth was saved
+(e.g. `-07:00` for a summer birth), which is a fixed offset, not a
+zoneinfo. Comparing `now.hour` against config hours using that offset
+silently drifts by an hour across DST in observing regions. The
+entrypoint uses `datetime.now().astimezone()` so the Pi's zoneinfo (set
+via `timedatectl set-timezone`) drives wall-clock semantics; don't
+"simplify" that back to `tz=cfg.born_at.tzinfo`.
+
 `Persistent=true` means a Pi that boots mid-day catches up exactly once
 instead of waiting for the next top of the hour; keep that flag or
 hourly catch-up regressions become hard to spot. `AccuracySec=1min` lets

@@ -56,10 +56,15 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     cfg = load(args.config or _default_config_path())
+    # `now` must reflect the family's civil wall clock, not a fixed offset.
+    # cfg.born_at.tzinfo is the offset captured when the birth was saved
+    # (e.g. -07:00 for a summer birth) — using it directly would drift by an
+    # hour across DST transitions and shift the wake window. The Pi's system
+    # timezone is the right source: zoneinfo honors DST.
     now = (
         datetime.fromisoformat(args.now)
         if args.now
-        else datetime.now(tz=cfg.born_at.tzinfo)
+        else datetime.now().astimezone()
     )
 
     # The systemd timer fires hourly all day, so the wake/sleep window in

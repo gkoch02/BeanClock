@@ -47,11 +47,16 @@ On a fresh Pi OS Lite SD card:
 ```bash
 git clone https://github.com/<you>/jubilant-tribble.git
 cd jubilant-tribble
+sudo timedatectl set-timezone America/Los_Angeles  # use your tz (zoneinfo, not an offset)
 sudo bash scripts/install.sh
 sudo $EDITOR /etc/kidage/config.toml         # set name + birth datetime
 sudo systemctl start kidage.service          # first refresh now
 systemctl list-timers kidage.timer           # confirm next hourly fire
 ```
+
+`wake_hour` and `sleep_hour` are interpreted against the Pi's system
+timezone, so it must be a real zoneinfo (e.g. `America/Los_Angeles`) for
+the wake window to track DST correctly.
 
 The installer creates `kidage` system user, builds a virtualenv at
 `/opt/kidage/.venv`, copies the `systemd` units, enables SPI, and starts the
@@ -123,6 +128,11 @@ tests/                        # pure-Python (no panel)
 - **Ghosting** — the daily clear at the first wake-hour fire wipes residual
   burn-in. Force one with `sudo rm /var/lib/kidage/last-clear && sudo
   systemctl start kidage.service`.
+- **Wake window fires an hour late after a DST change** — the Pi's system
+  timezone is set to a fixed offset (e.g. `Etc/GMT+7`) instead of a
+  zoneinfo. Run `timedatectl status` to check, then
+  `sudo timedatectl set-timezone America/Los_Angeles` (or your IANA zone)
+  so the OS handles DST.
 
 ## Licenses
 
