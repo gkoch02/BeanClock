@@ -16,10 +16,14 @@ the age is spelled out. A spread:
 | --- | --- | --- |
 | ![star accent, days format](docs/preview-star-days.png) | ![balloon accent, hours format](docs/preview-balloon-hours.png) | ![heart accent, full format](docs/preview-heart-full.png) |
 
+| Moon corners | Sun corners | Flower corners |
+| --- | --- | --- |
+| ![moon accent](docs/preview-moon.png) | ![sun accent](docs/preview-sun.png) | ![flower accent](docs/preview-flower.png) |
+
 ## Features
 
 - Beautiful, legible, playful layout — rounded **Fredoka** type, two-color
-  accents (heart / star / balloon), no fussy clipart.
+  accents (heart / star / balloon / moon / sun / flower), no fussy clipart.
 - Hourly refresh during a configurable wake window (default 07:00–21:00 local
   time), driven by a `systemd` timer that fires every hour and a wake-window
   check in the script itself — edit `/etc/kidage/config.toml` to change the
