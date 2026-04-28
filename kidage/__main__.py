@@ -6,6 +6,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from kidage.age import compute
 from kidage.config import load
@@ -23,6 +24,24 @@ def _default_config_path() -> Path:
     if local.exists():
         return local
     return Path("/etc/kidage/config.toml")
+
+
+def _system_zone() -> ZoneInfo:
+    # age.compute needs a DST-aware tzinfo to project born_at correctly across
+    # DST boundaries. datetime.now().astimezone() yields a fixed-offset
+    # datetime.timezone for the *current* moment, which can't replay a winter
+    # birth's offset in summer — so resolve the IANA name from the OS instead.
+    p = Path("/etc/localtime")
+    if p.is_symlink():
+        target = os.readlink(p)
+        marker = "zoneinfo/"
+        idx = target.rfind(marker)
+        if idx >= 0:
+            return ZoneInfo(target[idx + len(marker):])
+    tz_file = Path("/etc/timezone")
+    if tz_file.exists():
+        return ZoneInfo(tz_file.read_text().strip())
+    return ZoneInfo("UTC")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -57,15 +76,15 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     cfg = load(args.config or _default_config_path())
-    # `now` must reflect the family's civil wall clock, not a fixed offset.
-    # cfg.born_at.tzinfo is the offset captured when the birth was saved
-    # (e.g. -07:00 for a summer birth) — using it directly would drift by an
-    # hour across DST transitions and shift the wake window. The Pi's system
-    # timezone is the right source: zoneinfo honors DST.
+    # The live path needs a DST-aware ZoneInfo (not the fixed-offset tzinfo
+    # from `datetime.now().astimezone()`); otherwise age.compute can't project
+    # a winter-saved born_at into a summer wall clock and the anniversary
+    # slips an hour. --now keeps the caller's offset so layout previews show
+    # the exact wall clock requested.
     now = (
         datetime.fromisoformat(args.now)
         if args.now
-        else datetime.now().astimezone()
+        else datetime.now(tz=_system_zone())
     )
 
     # The systemd timer fires hourly all day, so the wake/sleep window in
