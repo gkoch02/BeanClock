@@ -1,10 +1,14 @@
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from kidage.age import AgeBreakdown, compute, pluralize
 
 PT = timezone(timedelta(hours=-7))
+PST = timezone(timedelta(hours=-8))
+LA = ZoneInfo("America/Los_Angeles")
+NY = ZoneInfo("America/New_York")
 
 
 def _calendar(age: AgeBreakdown) -> tuple[int, int, int, int]:
@@ -71,3 +75,23 @@ def test_compute_includes_total_days_and_hours():
     delta = now - born
     assert age.total_days == delta.days
     assert age.total_hours == int(delta.total_seconds() // 3600)
+
+
+def test_dst_straddle_keeps_wall_clock_anniversary():
+    # Born pre-DST in Pacific (-08:00); "now" is post-DST in the same zone
+    # (-07:00). At the same wall-clock minute on a monthly anniversary the
+    # hours field should be 0, not 23.
+    born = datetime(2024, 3, 9, 13, 54, tzinfo=PST).astimezone(LA)
+    now = datetime(2026, 4, 9, 13, 54, tzinfo=PT).astimezone(LA)
+    assert _calendar(compute(born, now)) == (2, 1, 0, 0)
+
+
+def test_cross_zone_preserves_birth_instant():
+    # Family moves Pacific -> Eastern. The actual moment of birth is fixed,
+    # so its wall-clock projection in NY is 3 hours later (16:54 ET). At
+    # 13:54 ET on an anniversary day the day hasn't flipped yet.
+    born = datetime(2024, 3, 9, 13, 54, tzinfo=PST)
+    now = datetime(2026, 4, 9, 13, 54, tzinfo=NY)
+    age = compute(born, now)
+    assert (age.years, age.months, age.days) == (2, 0, 30)
+    assert age.hours == 21

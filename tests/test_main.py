@@ -1,8 +1,10 @@
+import os
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from PIL import Image
 
-from kidage.__main__ import _default_config_path, main
+from kidage.__main__ import _default_config_path, _system_zone, main
 from kidage.render import HEIGHT, WIDTH
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -162,6 +164,126 @@ def test_main_preview_on_birthday_differs_from_normal_day(tmp_path):
         "--now", "2026-09-12T08:00:00-07:00",  # Lily's birthday
     ])
     assert normal.read_bytes() != bday.read_bytes()
+
+
+def test_system_zone_reads_localtime_symlink(tmp_path, monkeypatch):
+    # Most distros ship /etc/localtime as a symlink into /usr/share/zoneinfo.
+    fake_tzdata = tmp_path / "zoneinfo" / "America" / "Los_Angeles"
+    fake_tzdata.parent.mkdir(parents=True)
+    fake_tzdata.write_bytes(b"")
+    fake_localtime = tmp_path / "localtime"
+    os.symlink(fake_tzdata, fake_localtime)
+
+    real_path = Path
+    def fake_path(arg):
+        if arg == "/etc/localtime":
+            return fake_localtime
+        if arg == "/etc/timezone":
+            return tmp_path / "missing-timezone"
+        return real_path(arg)
+    monkeypatch.setattr("kidage.__main__.Path", fake_path)
+
+    zone = _system_zone()
+    assert isinstance(zone, ZoneInfo)
+    assert str(zone) == "America/Los_Angeles"
+
+
+def test_system_zone_falls_back_to_utc_when_nothing_configured(tmp_path, monkeypatch):
+    # Belt-and-braces: a host with neither a /etc/localtime symlink nor an
+    # /etc/timezone file shouldn't crash; UTC is a safe default.
+    real_path = Path
+    def fake_path(arg):
+        if arg == "/etc/localtime":
+            return tmp_path / "missing-localtime"
+        if arg == "/etc/timezone":
+            return tmp_path / "missing-timezone"
+        return real_path(arg)
+    monkeypatch.setattr("kidage.__main__.Path", fake_path)
+
+    zone = _system_zone()
+    assert isinstance(zone, ZoneInfo)
+    assert str(zone) == "UTC"
+
+
+def test_system_zone_falls_back_to_etc_timezone(tmp_path, monkeypatch):
+    # Some Debian-likes write the IANA name to /etc/timezone instead of (or
+    # alongside) the symlink.
+    fake_timezone = tmp_path / "timezone"
+    fake_timezone.write_text("America/New_York\n")
+
+    real_path = Path
+    def fake_path(arg):
+        if arg == "/etc/localtime":
+            return tmp_path / "missing-localtime"
+        if arg == "/etc/timezone":
+            return fake_timezone
+        return real_path(arg)
+    monkeypatch.setattr("kidage.__main__.Path", fake_path)
+
+    zone = _system_zone()
+    assert isinstance(zone, ZoneInfo)
+    assert str(zone) == "America/New_York"
+
+
+def test_live_now_carries_dst_aware_zoneinfo(tmp_path, monkeypatch):
+    # End-to-end DST regression for the live path (no --now). born_at is
+    # saved at fixed -08:00 (PST when the config was written); the system
+    # is in America/Los_Angeles and "now" is in summer. With a fixed-offset
+    # tzinfo on now, compute would project born_at into -07:00 and report
+    # 23 hours on the monthly anniversary. With a ZoneInfo, it lands at 0.
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        '[kid]\n'
+        'name = "Lily"\n'
+        'born_at = 2024-03-09T13:54:00-08:00\n'
+        '[schedule]\nwake_hour = 7\nsleep_hour = 21\n'
+        '[display]\nflip = false\naccent = "heart"\nformat = "extended"\n'
+        '[special_days]\nbirthday = true\nmilestones = []\n'
+    )
+
+    fake_tzdata = tmp_path / "zoneinfo" / "America" / "Los_Angeles"
+    fake_tzdata.parent.mkdir(parents=True)
+    fake_tzdata.write_bytes(b"")
+    fake_localtime = tmp_path / "localtime"
+    os.symlink(fake_tzdata, fake_localtime)
+    real_path = Path
+    def fake_path(arg):
+        if arg == "/etc/localtime":
+            return fake_localtime
+        if arg == "/etc/timezone":
+            return tmp_path / "missing"
+        return real_path(arg)
+    monkeypatch.setattr("kidage.__main__.Path", fake_path)
+
+    # Pin datetime.now to a summer anniversary moment in PDT.
+    from datetime import datetime as _dt
+
+    class FakeDateTime(_dt):
+        @classmethod
+        def now(cls, tz=None):
+            return _dt(2026, 4, 9, 13, 54, tzinfo=tz)
+    monkeypatch.setattr("kidage.__main__.datetime", FakeDateTime)
+
+    captured = {}
+    real_compute = __import__("kidage.age", fromlist=["compute"]).compute
+    def fake_compute(born_at, now):
+        captured["now"] = now
+        return real_compute(born_at, now)
+    monkeypatch.setattr("kidage.__main__.compute", fake_compute)
+
+    # Patch display.show so the live path doesn't try to touch hardware.
+    import kidage.display
+    monkeypatch.setattr(kidage.display, "show", lambda *_, **__: None)
+
+    rc = main(["--config", str(cfg)])
+    assert rc == 0
+    now = captured["now"]
+    assert isinstance(now.tzinfo, ZoneInfo)
+    assert str(now.tzinfo) == "America/Los_Angeles"
+
+    from kidage.age import compute
+    age = compute(_dt.fromisoformat("2024-03-09T13:54:00-08:00"), now)
+    assert (age.years, age.months, age.days, age.hours) == (2, 1, 0, 0)
 
 
 def test_preview_ignores_wake_window(tmp_path, monkeypatch):
