@@ -19,7 +19,7 @@ class Config:
     milestones: tuple[int, ...]
 
 
-VALID_ACCENTS = {"heart", "star", "balloon"}
+VALID_ACCENTS = {"heart", "star", "balloon", "moon", "sun", "flower"}
 VALID_FORMATS = {"extended", "days", "hours", "full"}
 DEFAULT_MILESTONES: tuple[int, ...] = (100, 500, 1000, 2000, 5000)
 

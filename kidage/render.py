@@ -85,10 +85,56 @@ def _draw_balloon(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int = 10) -
     draw.line((cx, cy + size + 1, cx, cy + size + 5), fill=0, width=1)
 
 
+def _draw_moon(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int = 8) -> None:
+    r = size
+    draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=0)
+    # Bite a white disc out of the right side to leave a left-facing crescent.
+    bite = max(2, r // 2 + 1)
+    draw.ellipse((cx - r + bite, cy - r, cx + r + bite, cy + r), fill=1)
+
+
+def _draw_sun(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int = 8) -> None:
+    import math
+
+    r = max(2, size // 2 + 1)
+    draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=0)
+    if size < 6:
+        return
+    inner = r + 1
+    outer = size + 1
+    for i in range(8):
+        angle = i * math.pi / 4
+        x1 = cx + inner * math.cos(angle)
+        y1 = cy + inner * math.sin(angle)
+        x2 = cx + outer * math.cos(angle)
+        y2 = cy + outer * math.sin(angle)
+        draw.line((x1, y1, x2, y2), fill=0, width=1)
+
+
+def _draw_flower(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int = 7) -> None:
+    if size < 6:
+        # Petals can't resolve below ~6px; degrade to a chunky dot like heart.
+        r = max(1, size // 2)
+        draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=0)
+        return
+    pr = max(2, size // 3)
+    offset = size - pr + 1
+    for dx, dy in ((0, -offset), (offset, 0), (0, offset), (-offset, 0)):
+        draw.ellipse(
+            (cx + dx - pr, cy + dy - pr, cx + dx + pr, cy + dy + pr),
+            fill=0,
+        )
+    cr = max(1, size // 4)
+    draw.ellipse((cx - cr, cy - cr, cx + cr, cy + cr), fill=1)
+
+
 _ACCENTS: dict[str, AccentFn] = {
     "heart": _draw_heart,
     "star": _draw_star,
     "balloon": _draw_balloon,
+    "moon": _draw_moon,
+    "sun": _draw_sun,
+    "flower": _draw_flower,
 }
 
 

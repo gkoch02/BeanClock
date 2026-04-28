@@ -15,7 +15,10 @@ LONG_AGE = AgeBreakdown(99, 11, 30, 23, total_days=36524, total_hours=876575)
 
 
 def _has_ink(img):
-    return b"\x00" in img.tobytes()
+    # Any byte < 0xff means at least one of its 8 packed pixels is black.
+    # Checking for b"\x00" directly would miss thin or cutout glyphs that
+    # never leave 8 byte-aligned contiguous black pixels (e.g. moon, flower).
+    return any(byte != 0xFF for byte in img.tobytes())
 
 
 def _ink_x_extent(img, y_range, x_range=None):
@@ -55,8 +58,11 @@ def test_compose_preview_is_rgb_panel_size():
     assert p.mode == "RGB"
 
 
+ACCENTS = ("heart", "star", "balloon", "moon", "sun", "flower")
+
+
 def test_render_accepts_known_accents():
-    for accent in ("heart", "star", "balloon"):
+    for accent in ACCENTS:
         b, r = render("Lily", TWO_YEARS, BORN, accent=accent)
         assert _has_ink(r)
 
@@ -65,13 +71,12 @@ def test_accents_produce_distinct_red_planes():
     """Each accent must actually paint differently; otherwise an accent-fn
     regression (e.g. _ACCENTS.get always returning the default) would slip
     past the existing "ink exists" check."""
-    planes = {
-        a: render("Lily", TWO_YEARS, BORN, accent=a)[1].tobytes()
-        for a in ("heart", "star", "balloon")
-    }
-    assert planes["heart"] != planes["star"]
-    assert planes["star"] != planes["balloon"]
-    assert planes["heart"] != planes["balloon"]
+    planes = [
+        render("Lily", TWO_YEARS, BORN, accent=a)[1].tobytes() for a in ACCENTS
+    ]
+    for i, a in enumerate(planes):
+        for b in planes[i + 1 :]:
+            assert a != b
 
 
 def test_text_clears_frame_pad_margin():

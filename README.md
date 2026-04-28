@@ -82,7 +82,7 @@ sleep_hour = 21   # inclusive, local time of last daily update
 
 [display]
 flip   = false      # rotate 180° if the ribbon comes out the other side
-accent = "heart"    # heart | star | balloon
+accent = "heart"    # heart | star | balloon | moon | sun | flower
 format = "extended" # extended (years/months + days/hours) | days | hours | full
 
 [special_days]
