@@ -46,6 +46,12 @@ def load(path: Path) -> Config:
         raise ValueError("schedule must satisfy 0 <= wake_hour < sleep_hour <= 23")
 
     display = raw.get("display", {})
+    unknown = set(display) - {"flip", "accent", "format"}
+    if unknown:
+        raise ValueError(
+            f"unknown key(s) under [display]: {sorted(unknown)}; "
+            "valid keys are 'flip', 'accent', 'format'"
+        )
     flip = bool(display.get("flip", False))
     accent = str(display.get("accent", "heart")).lower()
     if accent not in VALID_ACCENTS:
