@@ -21,8 +21,12 @@ def compute(born_at: datetime, now: datetime) -> AgeBreakdown:
         raise ValueError("born_at and now must be timezone-aware")
     if now < born_at:
         raise ValueError("now is before born_at; the kiddo isn't here yet")
-    rd = relativedelta(now, born_at)
-    delta = now - born_at
+    # Wall-clock semantics: project both into now's zone and strip tzinfo so
+    # DST doesn't shift the anniversary by an hour twice a year.
+    born_local = born_at.astimezone(now.tzinfo).replace(tzinfo=None)
+    now_local = now.replace(tzinfo=None)
+    rd = relativedelta(now_local, born_local)
+    delta = now_local - born_local
     return AgeBreakdown(
         rd.years,
         rd.months,
