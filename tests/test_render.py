@@ -113,11 +113,63 @@ def test_format_modes_produce_distinct_planes():
     smoke checks below."""
     planes = {
         fmt: render("Lily", AGE, BORN, age_format=fmt)[0].tobytes()
-        for fmt in ("extended", "days", "hours")
+        for fmt in ("extended", "days", "hours", "full")
     }
     assert planes["extended"] != planes["days"]
     assert planes["days"] != planes["hours"]
     assert planes["extended"] != planes["hours"]
+    assert planes["extended"] != planes["full"]
+    assert planes["days"] != planes["full"]
+
+
+def test_format_full_adds_ink_in_bottom_corners():
+    """`full` augments the extended layout with compact total readouts in
+    the bottom-left and bottom-right of the black plane. The two corners
+    must gain ink relative to plain extended; otherwise the totals aren't
+    actually being painted."""
+    extended_black, _ = render("Lily", AGE, BORN, age_format="extended")
+    full_black, _ = render("Lily", AGE, BORN, age_format="full")
+    footer_band = range(HEIGHT - FRAME_PAD - 13, HEIGHT - FRAME_PAD)
+    left = range(10, 60)
+    right = range(WIDTH - 60, WIDTH - 10)
+    ext_left = _ink_x_extent(extended_black, footer_band, left)
+    full_left = _ink_x_extent(full_black, footer_band, left)
+    ext_right = _ink_x_extent(extended_black, footer_band, right)
+    full_right = _ink_x_extent(full_black, footer_band, right)
+    assert ext_left is None and full_left is not None, (
+        "full mode should add black ink in the bottom-left corner"
+    )
+    assert ext_right is None and full_right is not None, (
+        "full mode should add black ink in the bottom-right corner"
+    )
+
+
+def test_format_full_uses_total_fields_not_calendar():
+    """The corner totals must reflect age.total_days / age.total_hours.
+    Two ages with identical calendar (years/months/days/hours) but
+    different totals should diverge in the bottom band of the black
+    plane (where the hero/sub above is identical)."""
+    big = AgeBreakdown(3, 7, 15, 4, total_days=1324, total_hours=31780)
+    small = AgeBreakdown(3, 7, 15, 4, total_days=42, total_hours=999)
+    big_black, _ = render("Lily", big, BORN, age_format="full")
+    small_black, _ = render("Lily", small, BORN, age_format="full")
+    assert big_black.tobytes() != small_black.tobytes()
+
+
+def test_format_full_preserves_extended_hero_and_sub():
+    """`full` differs from `extended` only in the footer row. The hero
+    band (y=33..62) and sub band (y=68..86) must be byte-identical so
+    layout regressions in the upper region get caught here rather than
+    drowning in the bottom-corner diff."""
+    extended_black, _ = render("Lily", AGE, BORN, age_format="extended")
+    full_black, _ = render("Lily", AGE, BORN, age_format="full")
+    ep = extended_black.load()
+    fp = full_black.load()
+    for y in list(range(33, 62)) + list(range(68, 86)):
+        for x in range(WIDTH):
+            assert ep[x, y] == fp[x, y], (
+                f"upper layout diverges at ({x}, {y})"
+            )
 
 
 def test_format_days_short_circuits_zero_to_newborn():

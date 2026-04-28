@@ -11,6 +11,8 @@ flip = false
 accent = "heart"
 # "extended" = years/months hero with days/hours subtitle (default).
 # "days" or "hours" = single big total count.
+# "full" = extended layout plus compact total_days / total_hours in the
+#   bottom corners.
 format = "extended"
 
 [special_days]
