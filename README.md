@@ -95,6 +95,14 @@ slides to the sub line, regardless of `display.format`. Feb 29 births
 celebrate Feb 28 in non-leap years; if a milestone happens to fall on the
 birthday, the birthday wins.
 
+The `born_at` offset pins the absolute moment of birth, but the
+years/months/days/hours breakdown is computed against the Pi's system
+zoneinfo, so the daily flip stays on the same wall-clock minute across
+DST transitions. If the Pi moves zones the actual instant of birth is
+preserved and its projection follows along — a Pacific-born kid on an
+Eastern Pi sees the day flip three hours later in local time, not at the
+old Pacific minute.
+
 Edit `/etc/kidage/config.toml` and run `sudo systemctl start kidage.service`
 to push the change to the panel immediately (the manual refresh still
 respects `wake_hour`/`sleep_hour`, so widen those first if you're testing

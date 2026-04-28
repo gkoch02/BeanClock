@@ -109,13 +109,28 @@ wins over milestone on overlap; both are toggleable via `[special_days]`
 in the config. The same hero shrink loop applies, so long labels like
 "Happy 99th Birthday!" don't need special handling.
 
+**Age math is wall-clock, not elapsed-UTC.** `kidage.age.compute` projects
+both `born_at` and `now` into `now.tzinfo` and strips the tzinfo before
+handing them to `relativedelta` and the timedelta. Without that step, a
+born_at saved at `-08:00` (PST) and a `now` of `-07:00` (PDT) would diff
+through real elapsed time and report `17 days 23 hours` at 1:54pm on a
+monthly anniversary instead of `18 days 0 hours` — same DST trap as the
+wake-window note below. A consequence: `total_days`/`total_hours` are
+also wall-clock counts, so spring-forward "loses" an hour and fall-back
+"gains" one; that's intentional and keeps the totals consistent with the
+years/months/days line above. If the family moves zones, the actual
+instant of birth is preserved but its wall-clock projection follows the
+system zoneinfo (Pacific birth → Eastern Pi means the daily flip moves
+to 4:54pm ET).
+
 ## Configuration
 
 `config.example.toml` is the canonical schema. The installer copies it to
 `/etc/kidage/config.toml` (`Environment=KIDAGE_CONFIG=…` in the unit). The
 TOML loader rejects naïve datetimes — `kid.born_at` must include an offset
-(e.g. `2022-09-12T03:47:00-07:00`); age math is timezone-aware end-to-end
-and assumes the offset matches the family's wall clock.
+(e.g. `2022-09-12T03:47:00-07:00`); the offset pins the absolute moment of
+birth, but wall-clock semantics for the anniversary follow the Pi's system
+zoneinfo (see "Age math is wall-clock" above).
 
 ## Scheduling
 
