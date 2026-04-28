@@ -91,7 +91,7 @@ born_at = 2024-01-01T00:00:00+00:00
     assert cfg.age_format == "extended"
 
 
-@pytest.mark.parametrize("value", ["days", "hours", "extended", "DAYS"])
+@pytest.mark.parametrize("value", ["days", "hours", "extended", "full", "DAYS"])
 def test_age_format_accepts_known_values(tmp_path, value):
     cfg = load(_write(tmp_path, f"""
 [kid]

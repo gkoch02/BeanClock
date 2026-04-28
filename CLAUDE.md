@@ -87,14 +87,18 @@ small hearts lost their shape at 4 px and the row reads cleaner without
 one. See the `accent == "heart"` branches in `_draw_frame` and `render`.
 
 **Hero layout depends on `age_format`.** The `format` config knob
-(`extended` / `days` / `hours`) reaches `render()` as `age_format` and
-picks between two hero baselines: `HERO_Y_TWO_LINE = 33` for `extended`
-(years/months hero with a days/hours sub line at `y=68`) and
-`HERO_Y_ONE_LINE = 47` for the single-total `days` / `hours` modes
-(centered vertically for the 28pt hero). The hero font auto-shrinks in
-2pt steps down to 16pt if the string would overflow `WIDTH - 28`; preserve
-that shrink loop when changing strings, since "31756 hours" already lands
-near the limit.
+(`extended` / `days` / `hours` / `full`) reaches `render()` as
+`age_format` and picks between two hero baselines: `HERO_Y_TWO_LINE = 33`
+for `extended` and `full` (years/months hero with a days/hours sub line
+at `y=68`) and `HERO_Y_ONE_LINE = 47` for the single-total `days` /
+`hours` modes (centered vertically for the 28pt hero). `full` is
+identical to `extended` except it also paints compact `total_days` /
+`total_hours` readouts (e.g. `1324d` / `31780h`) on the black plane in
+the bottom-left and bottom-right corners, sharing the footer row with
+the centered red "since …" string. The hero font auto-shrinks in 2pt
+steps down to 16pt if the string would overflow `WIDTH - 28`; preserve
+that shrink loop when changing strings, since "31756 hours" already
+lands near the limit.
 
 **Special-day mode is a third axis on top of `age_format`.**
 `kidage.special.detect()` returns a hero override string when `now` falls

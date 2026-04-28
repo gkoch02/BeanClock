@@ -20,7 +20,7 @@ class Config:
 
 
 VALID_ACCENTS = {"heart", "star", "balloon"}
-VALID_FORMATS = {"extended", "days", "hours"}
+VALID_FORMATS = {"extended", "days", "hours", "full"}
 DEFAULT_MILESTONES: tuple[int, ...] = (100, 500, 1000, 2000, 5000)
 
 
