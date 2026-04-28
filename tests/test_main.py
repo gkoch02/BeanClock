@@ -188,6 +188,23 @@ def test_system_zone_reads_localtime_symlink(tmp_path, monkeypatch):
     assert str(zone) == "America/Los_Angeles"
 
 
+def test_system_zone_falls_back_to_utc_when_nothing_configured(tmp_path, monkeypatch):
+    # Belt-and-braces: a host with neither a /etc/localtime symlink nor an
+    # /etc/timezone file shouldn't crash; UTC is a safe default.
+    real_path = Path
+    def fake_path(arg):
+        if arg == "/etc/localtime":
+            return tmp_path / "missing-localtime"
+        if arg == "/etc/timezone":
+            return tmp_path / "missing-timezone"
+        return real_path(arg)
+    monkeypatch.setattr("kidage.__main__.Path", fake_path)
+
+    zone = _system_zone()
+    assert isinstance(zone, ZoneInfo)
+    assert str(zone) == "UTC"
+
+
 def test_system_zone_falls_back_to_etc_timezone(tmp_path, monkeypatch):
     # Some Debian-likes write the IANA name to /etc/timezone instead of (or
     # alongside) the symlink.

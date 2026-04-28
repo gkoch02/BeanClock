@@ -31,6 +31,9 @@ def _system_zone() -> ZoneInfo:
     # DST boundaries. datetime.now().astimezone() yields a fixed-offset
     # datetime.timezone for the *current* moment, which can't replay a winter
     # birth's offset in summer — so resolve the IANA name from the OS instead.
+    # Pi OS ships /etc/localtime as a symlink and /etc/timezone as a one-line
+    # IANA name; if a future host ever ships /etc/localtime as a *copy* of the
+    # tzdata blob with no /etc/timezone next to it, this falls back to UTC.
     p = Path("/etc/localtime")
     if p.is_symlink():
         target = os.readlink(p)
