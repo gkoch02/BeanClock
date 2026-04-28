@@ -115,6 +115,18 @@ format = "weeks"
         load(p)
 
 
+def test_rejects_unknown_display_key(tmp_path):
+    p = _write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00+00:00
+[display]
+layout = "full"
+""")
+    with pytest.raises(ValueError, match="layout"):
+        load(p)
+
+
 def test_special_days_defaults(tmp_path):
     cfg = load(_write(tmp_path, """
 [kid]
