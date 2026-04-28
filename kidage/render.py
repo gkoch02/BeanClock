@@ -275,12 +275,12 @@ def render(
     # total_hours readouts in the bottom corners, on the black plane so they
     # contrast with the red footer between them.
     if age_format == "full":
-        totals_font = _font(11, "Regular")
+        totals_font = _font(13, "Regular")
         left_total = f"{age.total_days}d"
         right_total = f"{age.total_hours}h"
         rt_w = _text_width(bd, right_total, totals_font)
-        bd.text((14, fy + 1), left_total, font=totals_font, fill=0)
-        bd.text((WIDTH - 14 - rt_w, fy + 1), right_total, font=totals_font, fill=0)
+        bd.text((14, fy), left_total, font=totals_font, fill=0)
+        bd.text((WIDTH - 14 - rt_w, fy), right_total, font=totals_font, fill=0)
 
     if flip:
         black = black.rotate(180)
