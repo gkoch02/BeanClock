@@ -12,9 +12,9 @@ and rests overnight.
 The `display.accent` and `display.format` knobs change the border trim and how
 the age is spelled out. A spread:
 
-| Star corners, total days | Balloon corners, total hours |
-| --- | --- |
-| ![star accent, days format](docs/preview-star-days.png) | ![balloon accent, hours format](docs/preview-balloon-hours.png) |
+| Star corners, total days | Balloon corners, total hours | Heart corners, full layout |
+| --- | --- | --- |
+| ![star accent, days format](docs/preview-star-days.png) | ![balloon accent, hours format](docs/preview-balloon-hours.png) | ![heart accent, full format](docs/preview-heart-full.png) |
 
 ## Features
 
@@ -83,7 +83,7 @@ sleep_hour = 21   # inclusive, local time of last daily update
 [display]
 flip   = false      # rotate 180° if the ribbon comes out the other side
 accent = "heart"    # heart | star | balloon
-format = "extended" # extended (years/months + days/hours) | days | hours
+format = "extended" # extended (years/months + days/hours) | days | hours | full
 
 [special_days]
 birthday   = true                          # hero swaps to "Happy Nth Birthday!"
