@@ -16,10 +16,15 @@ from kidage.special import detect as detect_special
 
 log = logging.getLogger("kidage")
 
-# scripts/install.sh writes `git describe --always --dirty --tags` here after
-# rsync, so this resolves to /opt/kidage/VERSION on the Pi (kidage/__main__.py
-# lives at /opt/kidage/kidage/__main__.py). Module-level so tests can patch it.
-VERSION_FILE = Path(__file__).resolve().parent.parent / "VERSION"
+# scripts/install.sh writes `git describe --always --dirty --tags` to
+# /opt/kidage/VERSION (the install dir, also hardcoded in systemd/kidage.service
+# and install.sh). The __file__-relative path is the editable-install fallback
+# for `pip install -e .` dev work — under a non-editable install (which the
+# installer uses) __file__ lives in site-packages, not the install root.
+VERSION_FILE_CANDIDATES = [
+    Path("/opt/kidage/VERSION"),
+    Path(__file__).resolve().parent.parent / "VERSION",
+]
 
 
 def _default_config_path() -> Path:
@@ -34,8 +39,9 @@ def _default_config_path() -> Path:
 
 def _deployed_revision() -> str | None:
     """Return the git revision recorded by install.sh, or None if absent."""
-    if VERSION_FILE.is_file():
-        return VERSION_FILE.read_text().strip() or None
+    for path in VERSION_FILE_CANDIDATES:
+        if path.is_file():
+            return path.read_text().strip() or None
     return None
 
 
