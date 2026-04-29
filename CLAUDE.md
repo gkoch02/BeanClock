@@ -79,12 +79,15 @@ each corner. The constants `FRAME_OUTER`, `FRAME_BEAD_INSET`, and
 and footer `y = HEIGHT - FRAME_PAD - 13` reference it directly. Resizing
 text or moving the frame in isolation will produce clipping; adjust both.
 
-**Per-theme tweaks.** The `accent` config (`heart` / `star` / `balloon`)
-controls the glyphs flanking the name row, the corner glyphs, and whether
-the footer gets an accent. The heart theme intentionally uses plain red
-dots in the frame corners (not small hearts) and omits the footer accent —
-small hearts lost their shape at 4 px and the row reads cleaner without
-one. See the `accent == "heart"` branches in `_draw_frame` and `render`.
+**Per-theme tweaks.** The `accent` config (`heart` / `star` / `balloon` /
+`moon` / `sun` / `flower`) controls the glyphs flanking the name row, the
+corner glyphs, and whether the footer gets an accent. The heart theme
+intentionally uses plain red dots in the frame corners (not small hearts)
+and omits the footer accent — small hearts lost their shape at 4 px and
+the row reads cleaner without one. See the `accent == "heart"` branches
+in `_draw_frame` and `render`. `VALID_ACCENTS` in `kidage/config.py` is
+the source of truth; keep `_draw_frame`, the name-row branches in
+`render`, and the README spread in lockstep when adding a new glyph.
 
 **Hero layout depends on `age_format`.** The `format` config knob
 (`extended` / `days` / `hours` / `full`) reaches `render()` as
@@ -134,7 +137,27 @@ to 4:54pm ET).
 TOML loader rejects naïve datetimes — `kid.born_at` must include an offset
 (e.g. `2022-09-12T03:47:00-07:00`); the offset pins the absolute moment of
 birth, but wall-clock semantics for the anniversary follow the Pi's system
-zoneinfo (see "Age math is wall-clock" above).
+zoneinfo (see "Age math is wall-clock" above). The `[display]` block is
+strict: unknown keys raise at load time so a typo like `layout = "full"`
+fails fast instead of silently rendering the default — keep the
+allow-list (`flip` / `accent` / `format`) in sync with the dataclass when
+adding a knob.
+
+## Deployed-revision stamping
+
+`scripts/install.sh` writes `git describe --always --dirty --tags` to
+`/opt/kidage/VERSION` after the rsync (must run *after*, since
+`rsync --delete` would otherwise wipe the file the installer just wrote on
+re-runs). `kidage --version` reads that file via
+`VERSION_FILE_CANDIDATES` in `__main__.py` and prints
+`kidage <pkg> (<rev>)`. The candidate list is order-sensitive:
+`/opt/kidage/VERSION` is checked first because the installer does
+`pip install $INSTALL_DIR[pi]` — a *non-editable* install — so
+`Path(__file__).parent.parent` resolves to the venv's site-packages, not
+the install root. The `__file__`-relative path stays in the list as the
+editable-dev fallback (`pip install -e .`). Don't reorder or drop either
+entry without updating `tests/test_main.py`, which pins the production
+path.
 
 ## Scheduling
 

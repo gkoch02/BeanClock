@@ -120,7 +120,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e '.[dev]'
 
-pytest                                       # 76 tests, no panel needed
+pytest                                       # 91 tests, no panel needed
 python -m kidage --config config.example.toml --preview /tmp/p.png
 xdg-open /tmp/p.png                          # eyeball the layout
 ```
@@ -159,6 +159,11 @@ tests/                        # pure-Python (no panel)
   zoneinfo. Run `timedatectl status` to check, then
   `sudo timedatectl set-timezone America/Los_Angeles` (or your IANA zone)
   so the OS handles DST.
+- **What's running on this Pi?** — `kidage --version` prints the package
+  version plus the git revision recorded by `install.sh` (e.g.
+  `kidage 0.1.0 (v0.1.0-3-gabc1234-dirty)`). The installer writes this to
+  `/opt/kidage/VERSION` on every run, so re-running it after a `git pull`
+  is enough to refresh the stamp.
 
 ## Licenses
 
