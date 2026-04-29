@@ -37,6 +37,11 @@ rsync -a --delete \
     --exclude '.git' --exclude '.venv' --exclude '__pycache__' \
     "$REPO_DIR"/ "$INSTALL_DIR"/
 
+# Must run after rsync --delete (which would otherwise wipe the file).
+echo "==> Recording deployed revision"
+VERSION_STR="$(git -C "$REPO_DIR" describe --always --dirty --tags 2>/dev/null || echo unknown)"
+echo "$VERSION_STR" > "$INSTALL_DIR/VERSION"
+
 echo "==> Creating virtualenv and installing"
 if [[ ! -d "$INSTALL_DIR/.venv" ]]; then
     python3 -m venv "$INSTALL_DIR/.venv"

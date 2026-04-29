@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 from datetime import datetime
+from importlib import metadata
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -15,6 +16,16 @@ from kidage.special import detect as detect_special
 
 log = logging.getLogger("kidage")
 
+# scripts/install.sh writes `git describe --always --dirty --tags` to
+# /opt/kidage/VERSION (the install dir, also hardcoded in systemd/kidage.service
+# and install.sh). The __file__-relative path is the editable-install fallback
+# for `pip install -e .` dev work — under a non-editable install (which the
+# installer uses) __file__ lives in site-packages, not the install root.
+VERSION_FILE_CANDIDATES = [
+    Path("/opt/kidage/VERSION"),
+    Path(__file__).resolve().parent.parent / "VERSION",
+]
+
 
 def _default_config_path() -> Path:
     env = os.environ.get("KIDAGE_CONFIG")
@@ -24,6 +35,23 @@ def _default_config_path() -> Path:
     if local.exists():
         return local
     return Path("/etc/kidage/config.toml")
+
+
+def _deployed_revision() -> str | None:
+    """Return the git revision recorded by install.sh, or None if absent."""
+    for path in VERSION_FILE_CANDIDATES:
+        if path.is_file():
+            return path.read_text().strip() or None
+    return None
+
+
+def _version_string() -> str:
+    try:
+        pkg = metadata.version("kidage")
+    except metadata.PackageNotFoundError:
+        pkg = "unknown"
+    rev = _deployed_revision()
+    return f"kidage {pkg} ({rev})" if rev else f"kidage {pkg}"
 
 
 def _system_zone() -> ZoneInfo:
@@ -71,6 +99,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Override the current time (ISO 8601 with offset). Useful for previews.",
     )
     parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument("--version", action="version", version=_version_string())
     args = parser.parse_args(argv)
 
     logging.basicConfig(
