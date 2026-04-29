@@ -2,9 +2,16 @@ import os
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import pytest
 from PIL import Image
 
-from kidage.__main__ import _default_config_path, _system_zone, main
+from kidage.__main__ import (
+    _default_config_path,
+    _deployed_revision,
+    _system_zone,
+    _version_string,
+    main,
+)
 from kidage.render import HEIGHT, WIDTH
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -284,6 +291,53 @@ def test_live_now_carries_dst_aware_zoneinfo(tmp_path, monkeypatch):
     from kidage.age import compute
     age = compute(_dt.fromisoformat("2024-03-09T13:54:00-08:00"), now)
     assert (age.years, age.months, age.days, age.hours) == (2, 1, 0, 0)
+
+
+def test_deployed_revision_returns_none_when_file_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr("kidage.__main__.VERSION_FILE", tmp_path / "missing")
+    assert _deployed_revision() is None
+
+
+def test_deployed_revision_reads_version_file(tmp_path, monkeypatch):
+    f = tmp_path / "VERSION"
+    f.write_text("v0.1.0-3-gabc1234-dirty\n")
+    monkeypatch.setattr("kidage.__main__.VERSION_FILE", f)
+    assert _deployed_revision() == "v0.1.0-3-gabc1234-dirty"
+
+
+def test_deployed_revision_treats_empty_file_as_missing(tmp_path, monkeypatch):
+    f = tmp_path / "VERSION"
+    f.write_text("   \n")
+    monkeypatch.setattr("kidage.__main__.VERSION_FILE", f)
+    assert _deployed_revision() is None
+
+
+def test_version_string_includes_package_version_without_revision(tmp_path, monkeypatch):
+    monkeypatch.setattr("kidage.__main__.VERSION_FILE", tmp_path / "missing")
+    s = _version_string()
+    assert s.startswith("kidage ")
+    assert "(" not in s
+
+
+def test_version_string_includes_revision_when_present(tmp_path, monkeypatch):
+    f = tmp_path / "VERSION"
+    f.write_text("v0.1.0-3-gabc1234-dirty\n")
+    monkeypatch.setattr("kidage.__main__.VERSION_FILE", f)
+    s = _version_string()
+    assert "v0.1.0-3-gabc1234-dirty" in s
+    assert s.startswith("kidage ")
+
+
+def test_version_flag_prints_and_exits_zero(tmp_path, monkeypatch, capsys):
+    f = tmp_path / "VERSION"
+    f.write_text("v0.1.0-3-gabc1234-dirty\n")
+    monkeypatch.setattr("kidage.__main__.VERSION_FILE", f)
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--version"])
+    assert excinfo.value.code == 0
+    out = capsys.readouterr().out
+    assert "kidage" in out
+    assert "v0.1.0-3-gabc1234-dirty" in out
 
 
 def test_preview_ignores_wake_window(tmp_path, monkeypatch):

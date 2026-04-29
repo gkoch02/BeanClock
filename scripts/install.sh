@@ -37,6 +37,20 @@ rsync -a --delete \
     --exclude '.git' --exclude '.venv' --exclude '__pycache__' \
     "$REPO_DIR"/ "$INSTALL_DIR"/
 
+# Record the source revision so `kidage --version` (and ad-hoc inspection of
+# /opt/kidage/VERSION) can answer "what is deployed here?". Must run after
+# rsync --delete or it would wipe the file. --dirty surfaces uncommitted
+# edits, which is the most likely failure mode of this rsync deploy model
+# (someone edits /opt/kidage in place, or installs from a clone with local
+# changes). If the source isn't a git checkout, write "unknown" rather than
+# failing the install.
+echo "==> Recording deployed revision"
+if VERSION_STR="$(git -C "$REPO_DIR" describe --always --dirty --tags 2>/dev/null)"; then
+    echo "$VERSION_STR" > "$INSTALL_DIR/VERSION"
+else
+    echo "unknown" > "$INSTALL_DIR/VERSION"
+fi
+
 echo "==> Creating virtualenv and installing"
 if [[ ! -d "$INSTALL_DIR/.venv" ]]; then
     python3 -m venv "$INSTALL_DIR/.venv"
