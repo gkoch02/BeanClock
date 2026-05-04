@@ -458,11 +458,21 @@ def test_live_after_hours_inverts_when_past_sunset(tmp_path, monkeypatch):
 
 
 def test_live_after_hours_disabled_never_inverts(tmp_path, monkeypatch):
-    """The default config (no after_hours_invert) must never invert,
-    even past sunset — feature stays opt-in."""
+    """A config that omits after_hours_invert must never invert, even
+    past sunset — and must skip the sunset calc entirely so a
+    misconfigured location can't cause surprises."""
     from datetime import datetime as _dt
     from datetime import timedelta as _td
     from datetime import timezone as _tz
+
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        '[kid]\n'
+        'name = "Lily"\n'
+        'born_at = 2022-09-12T03:47:00-07:00\n'
+        '[schedule]\nwake_hour = 7\nsleep_hour = 21\n'
+    )
+
     PT = _tz(_td(hours=-7))
 
     class FakeDateTime(_dt):
@@ -478,6 +488,6 @@ def test_live_after_hours_disabled_never_inverts(tmp_path, monkeypatch):
     monkeypatch.setattr("kidage.solar.sun_times", boom)
 
     calls = _called_show(monkeypatch)
-    rc = main(["--config", str(EXAMPLE_CONFIG)])
+    rc = main(["--config", str(cfg)])
     assert rc == 0
     assert len(calls) == 1

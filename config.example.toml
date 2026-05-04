@@ -17,15 +17,17 @@ format = "extended"
 # After sunset (computed from [location] below), invert the black plane so
 # the panel reads white-on-black. Red beads/accents stay red. Requires
 # [location] to be set; outside the [wake_hour, sleep_hour] window the
-# panel still skips entirely.
-after_hours_invert = false
+# panel still skips entirely. Set to false to keep day-style rendering
+# until sleep_hour.
+after_hours_invert = true
 
 [location]
-# Optional. Latitude/longitude in decimal degrees, used only by
-# display.after_hours_invert to compute today's sunset. Omit both to
-# disable the after-hours feature.
-# latitude = 37.2872
-# longitude = -121.9500
+# Latitude/longitude in decimal degrees, used by display.after_hours_invert
+# to compute today's sunset. Defaults are San Jose, CA — change to your
+# actual location. Omit the whole block (and set after_hours_invert =
+# false above) to disable the after-hours feature.
+latitude = 37.2872
+longitude = -121.9500
 
 [special_days]
 # Show "Happy Nth Birthday!" on the kid's birthday (Feb 29 falls back to
