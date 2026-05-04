@@ -209,6 +209,7 @@ def render(
     flip: bool = False,
     age_format: str = "extended",
     special: str | None = None,
+    after_hours: bool = False,
 ) -> tuple[Image.Image, Image.Image]:
     black = Image.new("1", (WIDTH, HEIGHT), 1)
     red = Image.new("1", (WIDTH, HEIGHT), 1)
@@ -285,6 +286,23 @@ def render(
         totals_y = HEIGHT - FRAME_PAD - totals_size
         bd.text((14, totals_y), left_total, font=totals_font, fill=0)
         bd.text((WIDTH - 14 - rt_w, totals_y), right_total, font=totals_font, fill=0)
+
+    if after_hours:
+        # Swap 0↔1 on the black plane: white panel background becomes black
+        # ink, drawn text becomes "no ink" (bare panel = white).
+        inverted = black.point(lambda px: 0 if px else 1)
+        # The Waveshare driver ORs the two planes onto the panel, so a
+        # uniformly-black plane would mask out every red bead/accent. Punch
+        # black back out wherever red has ink so red stays visible against
+        # the new black background — the user wants black/white inverted
+        # but red preserved.
+        rp = red.load()
+        bp = inverted.load()
+        for y in range(HEIGHT):
+            for x in range(WIDTH):
+                if rp[x, y] == 0:
+                    bp[x, y] = 1
+        black = inverted
 
     if flip:
         black = black.rotate(180)

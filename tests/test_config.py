@@ -127,6 +127,99 @@ layout = "full"
         load(p)
 
 
+def test_after_hours_invert_and_location_default_off(tmp_path):
+    """A config without [location] or after_hours_invert keeps existing
+    behavior — feature is opt-in."""
+    cfg = load(_write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00+00:00
+"""))
+    assert cfg.after_hours_invert is False
+    assert cfg.latitude is None
+    assert cfg.longitude is None
+
+
+def test_load_full_after_hours_config(tmp_path):
+    cfg = load(_write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00+00:00
+[display]
+after_hours_invert = true
+[location]
+latitude = 37.2872
+longitude = -121.95
+"""))
+    assert cfg.after_hours_invert is True
+    assert cfg.latitude == 37.2872
+    assert cfg.longitude == -121.95
+
+
+def test_after_hours_invert_requires_location(tmp_path):
+    p = _write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00+00:00
+[display]
+after_hours_invert = true
+""")
+    with pytest.raises(ValueError, match="after_hours_invert"):
+        load(p)
+
+
+def test_location_requires_both_lat_and_lon(tmp_path):
+    p = _write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00+00:00
+[location]
+latitude = 37.2872
+""")
+    with pytest.raises(ValueError, match="set together"):
+        load(p)
+
+
+def test_location_rejects_unknown_key(tmp_path):
+    p = _write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00+00:00
+[location]
+latitude = 0.0
+longitude = 0.0
+city = "Springfield"
+""")
+    with pytest.raises(ValueError, match="city"):
+        load(p)
+
+
+def test_location_rejects_out_of_range_latitude(tmp_path):
+    p = _write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00+00:00
+[location]
+latitude = 95.0
+longitude = 0.0
+""")
+    with pytest.raises(ValueError, match="latitude"):
+        load(p)
+
+
+def test_location_rejects_out_of_range_longitude(tmp_path):
+    p = _write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00+00:00
+[location]
+latitude = 0.0
+longitude = -200.0
+""")
+    with pytest.raises(ValueError, match="longitude"):
+        load(p)
+
+
 def test_special_days_defaults(tmp_path):
     cfg = load(_write(tmp_path, """
 [kid]
