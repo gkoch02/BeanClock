@@ -51,6 +51,61 @@ def test_render_flip_rotates_both_planes():
     assert upright[1].tobytes() != flipped[1].tobytes()
 
 
+def test_render_after_hours_inverts_black_only():
+    """after_hours flips black/white but leaves red untouched, so the
+    panel reads white-on-black with red beads still in place."""
+    normal = render("Lily", AGE, BORN)
+    inverted = render("Lily", AGE, BORN, after_hours=True)
+    assert normal[0].tobytes() != inverted[0].tobytes()
+    assert normal[1].tobytes() == inverted[1].tobytes()
+
+
+def test_render_after_hours_makes_background_inked():
+    """After inversion, what used to be the white panel background should
+    now be inked on the black plane. Sample a margin pixel that's outside
+    the frame and well clear of any glyphs."""
+    normal_black, _ = render("Lily", AGE, BORN)
+    inv_black, _ = render("Lily", AGE, BORN, after_hours=True)
+    np = normal_black.load()
+    ip = inv_black.load()
+    # (0, 0) is the very top-left corner — outside the rounded frame, so
+    # it's blank white in the normal render and should be ink after
+    # inversion.
+    assert np[0, 0] == 1
+    assert ip[0, 0] == 0
+
+
+def test_render_after_hours_punches_black_out_under_red_ink():
+    """The Waveshare driver ORs the two planes onto the panel, so a
+    naive 'invert all of black' would mask out red. Verify that wherever
+    the red plane has ink, the inverted black plane is *not* inked, so
+    red still shows through against the new black background."""
+    _, red = render("Lily", AGE, BORN)
+    inv_black, _ = render("Lily", AGE, BORN, after_hours=True)
+    rp = red.load()
+    bp = inv_black.load()
+    red_pixels = [
+        (x, y) for y in range(HEIGHT) for x in range(WIDTH) if rp[x, y] == 0
+    ]
+    assert red_pixels, "expected the normal render to produce some red ink"
+    for x, y in red_pixels:
+        assert bp[x, y] == 1, (
+            f"black plane is inked at red pixel ({x}, {y}) — "
+            "would mask red on the panel"
+        )
+
+
+def test_render_after_hours_combines_with_flip():
+    """flip and after_hours are independent and must compose. Inverted-
+    then-flipped should differ from just-inverted, just-flipped, and
+    plain renders."""
+    plain = render("Lily", AGE, BORN)[0].tobytes()
+    flipped = render("Lily", AGE, BORN, flip=True)[0].tobytes()
+    inverted = render("Lily", AGE, BORN, after_hours=True)[0].tobytes()
+    both = render("Lily", AGE, BORN, flip=True, after_hours=True)[0].tobytes()
+    assert len({plain, flipped, inverted, both}) == 4
+
+
 def test_compose_preview_is_rgb_panel_size():
     black, red = render("Lily", AGE, BORN)
     p = compose_preview(black, red)

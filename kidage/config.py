@@ -15,8 +15,11 @@ class Config:
     flip: bool
     accent: str
     age_format: str
+    after_hours_invert: bool
     birthday: bool
     milestones: tuple[int, ...]
+    latitude: float | None
+    longitude: float | None
 
 
 VALID_ACCENTS = {"heart", "star", "balloon", "moon", "sun", "flower"}
@@ -46,11 +49,11 @@ def load(path: Path) -> Config:
         raise ValueError("schedule must satisfy 0 <= wake_hour < sleep_hour <= 23")
 
     display = raw.get("display", {})
-    unknown = set(display) - {"flip", "accent", "format"}
+    unknown = set(display) - {"flip", "accent", "format", "after_hours_invert"}
     if unknown:
         raise ValueError(
             f"unknown key(s) under [display]: {sorted(unknown)}; "
-            "valid keys are 'flip', 'accent', 'format'"
+            "valid keys are 'flip', 'accent', 'format', 'after_hours_invert'"
         )
     flip = bool(display.get("flip", False))
     accent = str(display.get("accent", "heart")).lower()
@@ -59,6 +62,32 @@ def load(path: Path) -> Config:
     age_format = str(display.get("format", "extended")).lower()
     if age_format not in VALID_FORMATS:
         raise ValueError(f"display.format must be one of {sorted(VALID_FORMATS)}")
+    after_hours_invert = bool(display.get("after_hours_invert", False))
+
+    location = raw.get("location", {})
+    unknown_loc = set(location) - {"latitude", "longitude"}
+    if unknown_loc:
+        raise ValueError(
+            f"unknown key(s) under [location]: {sorted(unknown_loc)}; "
+            "valid keys are 'latitude', 'longitude'"
+        )
+    latitude = location.get("latitude")
+    longitude = location.get("longitude")
+    if (latitude is None) != (longitude is None):
+        raise ValueError(
+            "location.latitude and location.longitude must be set together"
+        )
+    if latitude is not None:
+        latitude = float(latitude)
+        longitude = float(longitude)
+        if not -90.0 <= latitude <= 90.0:
+            raise ValueError("location.latitude must be in [-90, 90]")
+        if not -180.0 <= longitude <= 180.0:
+            raise ValueError("location.longitude must be in [-180, 180]")
+    if after_hours_invert and latitude is None:
+        raise ValueError(
+            "display.after_hours_invert requires [location] latitude/longitude"
+        )
 
     special = raw.get("special_days", {})
     birthday = bool(special.get("birthday", True))
@@ -77,6 +106,9 @@ def load(path: Path) -> Config:
         flip=flip,
         accent=accent,
         age_format=age_format,
+        after_hours_invert=after_hours_invert,
         birthday=birthday,
         milestones=milestones,
+        latitude=latitude,
+        longitude=longitude,
     )

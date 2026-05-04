@@ -103,6 +103,19 @@ steps down to 16pt if the string would overflow `WIDTH - 28`; preserve
 that shrink loop when changing strings, since "31756 hours" already
 lands near the limit.
 
+**After-hours inversion.** When `display.after_hours_invert = true` and
+`[location]` lat/long are set, `__main__` calls `kidage.solar.sun_times()`
+on the live wall-clock date and passes `after_hours = now >= sunset` into
+`render()`. `render()` swaps the black plane (0 ↔ 1) so the panel reads
+white-on-black, **then punches black back out wherever the red plane has
+ink** — the Waveshare driver ORs the two planes onto the panel, so a
+uniformly-black plane would otherwise mask out every red bead/accent. The
+wake-window skip at the top of `__main__` is unchanged: after-hours
+operates inside `[wake_hour, sleep_hour]`, so deep-night hours still skip
+the refresh entirely. `--now` previews stay literal (no surprise
+inversion); pass `--after-hours` to force the inverted look for layout
+work.
+
 **Special-day mode is a third axis on top of `age_format`.**
 `kidage.special.detect()` returns a hero override string when `now` falls
 on the kid's birthday (matching `born_at.month`/`day`, with Feb 29 → Feb
@@ -140,8 +153,10 @@ birth, but wall-clock semantics for the anniversary follow the Pi's system
 zoneinfo (see "Age math is wall-clock" above). The `[display]` block is
 strict: unknown keys raise at load time so a typo like `layout = "full"`
 fails fast instead of silently rendering the default — keep the
-allow-list (`flip` / `accent` / `format`) in sync with the dataclass when
-adding a knob.
+allow-list (`flip` / `accent` / `format` / `after_hours_invert`) in sync
+with the dataclass when adding a knob. The `[location]` block is also
+strict (`latitude` / `longitude` only) and is required when
+`after_hours_invert = true`.
 
 ## Deployed-revision stamping
 

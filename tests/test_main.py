@@ -1,4 +1,5 @@
 import os
+from datetime import UTC
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -370,3 +371,123 @@ def test_preview_ignores_wake_window(tmp_path, monkeypatch):
     assert rc == 0
     assert out.exists()
     assert calls == []  # preview path never touches display.show
+
+
+def _after_hours_config(tmp_path: Path) -> Path:
+    """Minimal config that opts in to after-hours inversion."""
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        '[kid]\n'
+        'name = "Lily"\n'
+        'born_at = 2022-09-12T03:47:00-07:00\n'
+        '[schedule]\nwake_hour = 7\nsleep_hour = 21\n'
+        '[display]\n'
+        'after_hours_invert = true\n'
+        '[location]\nlatitude = 37.2872\nlongitude = -121.95\n'
+    )
+    return cfg
+
+
+def test_after_hours_preview_via_cli_flag_inverts(tmp_path, monkeypatch):
+    """--after-hours forces inversion regardless of --now / sunset, so
+    layout previews don't have to wait for dusk."""
+    out_normal = tmp_path / "normal.png"
+    out_after = tmp_path / "after.png"
+    main([
+        "--config", str(EXAMPLE_CONFIG),
+        "--preview", str(out_normal),
+        "--now", "2026-04-27T12:00:00-07:00",
+    ])
+    main([
+        "--config", str(EXAMPLE_CONFIG),
+        "--after-hours",
+        "--preview", str(out_after),
+        "--now", "2026-04-27T12:00:00-07:00",
+    ])
+    assert out_normal.read_bytes() != out_after.read_bytes()
+
+
+def test_live_after_hours_inverts_when_past_sunset(tmp_path, monkeypatch):
+    """Live path: with after_hours_invert=true and lat/lon set, a refresh
+    after sunset hands an inverted black plane to display.show."""
+    cfg = _after_hours_config(tmp_path)
+
+    # Pin sunset to a known wall-clock so the test is deterministic
+    # regardless of the real solar position math.
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+    from datetime import timezone as _tz
+    fake_sunset = _dt(2026, 4, 28, 2, 30, tzinfo=UTC)  # 19:30 PDT
+    fake_sunrise = _dt(2026, 4, 27, 13, 0, tzinfo=UTC)  # 06:00 PDT
+    monkeypatch.setattr(
+        "kidage.solar.sun_times",
+        lambda d, lat, lon: (fake_sunrise, fake_sunset),
+    )
+
+    PT = _tz(_td(hours=-7))
+
+    class FakeDateTime(_dt):
+        @classmethod
+        def now(cls, tz=None):
+            # 20:00 PDT — past the fake sunset, still inside wake window.
+            return _dt(2026, 4, 27, 20, 0, tzinfo=tz)
+    monkeypatch.setattr("kidage.__main__.datetime", FakeDateTime)
+    # _system_zone is called inside main; force it to a fixed-offset zone
+    # the fake sunset can be compared against without DST surprises.
+    monkeypatch.setattr("kidage.__main__._system_zone", lambda: PT)
+
+    after_calls = _called_show(monkeypatch)
+    rc = main(["--config", str(cfg)])
+    assert rc == 0
+    assert len(after_calls) == 1
+    inverted_black = after_calls[0][0]
+
+    # And again, but at a wall clock before sunset — should NOT invert.
+    class PreSunsetDateTime(_dt):
+        @classmethod
+        def now(cls, tz=None):
+            return _dt(2026, 4, 27, 12, 0, tzinfo=tz)  # noon PDT
+    monkeypatch.setattr("kidage.__main__.datetime", PreSunsetDateTime)
+    pre_calls = _called_show(monkeypatch)
+    rc = main(["--config", str(cfg)])
+    assert rc == 0
+    assert len(pre_calls) == 1
+    normal_black = pre_calls[0][0]
+
+    assert inverted_black.tobytes() != normal_black.tobytes()
+
+
+def test_live_after_hours_disabled_never_inverts(tmp_path, monkeypatch):
+    """A config that omits after_hours_invert must never invert, even
+    past sunset — and must skip the sunset calc entirely so a
+    misconfigured location can't cause surprises."""
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+    from datetime import timezone as _tz
+
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        '[kid]\n'
+        'name = "Lily"\n'
+        'born_at = 2022-09-12T03:47:00-07:00\n'
+        '[schedule]\nwake_hour = 7\nsleep_hour = 21\n'
+    )
+
+    PT = _tz(_td(hours=-7))
+
+    class FakeDateTime(_dt):
+        @classmethod
+        def now(cls, tz=None):
+            return _dt(2026, 4, 27, 20, 30, tzinfo=tz)  # past sunset
+    monkeypatch.setattr("kidage.__main__.datetime", FakeDateTime)
+    monkeypatch.setattr("kidage.__main__._system_zone", lambda: PT)
+
+    # If after_hours_invert is off, sun_times must not be called.
+    def boom(*args, **kwargs):
+        raise AssertionError("sun_times called when after-hours is off")
+    monkeypatch.setattr("kidage.solar.sun_times", boom)
+
+    calls = _called_show(monkeypatch)
+    rc = main(["--config", str(cfg)])
+    assert rc == 0
+    assert len(calls) == 1

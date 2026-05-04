@@ -98,6 +98,14 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Override the current time (ISO 8601 with offset). Useful for previews.",
     )
+    parser.add_argument(
+        "--after-hours",
+        action="store_true",
+        help=(
+            "Force the after-hours (inverted black/white, red preserved) look. "
+            "Bypasses the sunset check; intended for layout previews."
+        ),
+    )
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument("--version", action="version", version=_version_string())
     args = parser.parse_args(argv)
@@ -129,6 +137,25 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
+    after_hours = args.after_hours
+    if not after_hours and cfg.after_hours_invert and args.now is None:
+        # Live path only: compare wall-clock now to today's sunset at the
+        # configured location. --now previews stay literal (no surprise
+        # inversion) — use --after-hours to force the inverted look.
+        # config.load() guarantees lat/lon are set when after_hours_invert
+        # is true, so the asserts here are static-check belt-and-braces.
+        from kidage.solar import sun_times
+        assert cfg.latitude is not None
+        assert cfg.longitude is not None
+        times = sun_times(now.date(), cfg.latitude, cfg.longitude)
+        if times is not None:
+            sunset_local = times[1].astimezone(now.tzinfo)
+            after_hours = now >= sunset_local
+            log.info(
+                "sunset=%s after_hours=%s",
+                sunset_local.isoformat(), after_hours,
+            )
+
     age = compute(cfg.born_at, now)
     log.info("kid=%s age=%s", cfg.name, age)
 
@@ -150,6 +177,7 @@ def main(argv: list[str] | None = None) -> int:
         flip=cfg.flip,
         age_format=cfg.age_format,
         special=special,
+        after_hours=after_hours,
     )
 
     if args.preview is not None:
