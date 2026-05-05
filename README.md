@@ -82,7 +82,7 @@ timer.
 
 ```toml
 [kid]
-name = "Lily"
+name = "Lilah"
 # Local wall-clock time of birth, with timezone offset.
 born_at = 2022-09-12T03:47:00-07:00
 
