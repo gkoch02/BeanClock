@@ -1,6 +1,6 @@
-import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
+import pytest
 from PIL import Image, ImageDraw
 
 from kidage.age import AgeBreakdown
@@ -10,8 +10,8 @@ from kidage.render import (
     FRAME_PAD,
     HEIGHT,
     WIDTH,
-    _draw_bead,
     _draw_balloon,
+    _draw_bead,
     _draw_centered,
     _draw_corner_dot,
     _draw_flower,
@@ -330,10 +330,10 @@ def test_long_hero_would_overflow_at_default_size():
 
 
 @pytest.mark.parametrize("born_at,expected", [
-    (datetime(2022, 9, 1, tzinfo=timezone.utc), "Sep 1, 2022"),
-    (datetime(2022, 9, 12, tzinfo=timezone.utc), "Sep 12, 2022"),
-    (datetime(2020, 12, 25, tzinfo=timezone.utc), "Dec 25, 2020"),
-    (datetime(2020, 2, 29, tzinfo=timezone.utc), "Feb 29, 2020"),
+    (datetime(2022, 9, 1, tzinfo=UTC), "Sep 1, 2022"),
+    (datetime(2022, 9, 12, tzinfo=UTC), "Sep 12, 2022"),
+    (datetime(2020, 12, 25, tzinfo=UTC), "Dec 25, 2020"),
+    (datetime(2020, 2, 29, tzinfo=UTC), "Feb 29, 2020"),
 ])
 def test_format_birthday(born_at, expected):
     assert _format_birthday(born_at) == expected
