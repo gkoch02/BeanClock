@@ -493,15 +493,27 @@ def test_draw_frame_red_beads_on_all_four_rails():
 
 
 def test_draw_frame_heart_uses_corner_dots_not_small_hearts():
-    """Heart accent must use corner dots in the frame corners (not hearts),
-    so the heart and star corner patterns differ on the red plane."""
-    _, red_heart = _make_frame_pair("heart", _draw_heart)
-    _, red_star = _make_frame_pair("star", _draw_star)
-    # Black planes are identical: only the outer border is drawn there.
-    black_heart, _ = _make_frame_pair("heart", _draw_heart)
-    black_star, _ = _make_frame_pair("star", _draw_star)
-    assert black_heart.tobytes() == black_star.tobytes()
-    assert red_heart.tobytes() != red_star.tobytes()
+    """Heart accent must use corner dots (not small hearts) in frame corners.
+
+    _draw_heart(size=4) places a polygon tip at cy+4 along the center column.
+    _draw_corner_dot(radius=2) only reaches cy+2. Pixels at cy+3 and cy+4
+    distinguish the two: a regression that switches back to small hearts inks
+    those pixels; corner dots leave them blank.
+
+    Bead rails and the outer border don't touch these positions: beads are
+    clamped to x in [19, 230] while the corner x values are 9 and 240.
+    """
+    corners = ((9, 9), (WIDTH - 10, 9), (9, HEIGHT - 10), (WIDTH - 10, HEIGHT - 10))
+    _, red = _make_frame_pair("heart", _draw_heart)
+    rp = red.load()
+    for cx, cy in corners:
+        for dy in (3, 4):
+            y = cy + dy
+            if 0 <= y < HEIGHT:
+                assert rp[cx, y] == 1, (
+                    f"corner ({cx},{cy}): pixel ({cx},{y}) is inked — "
+                    "looks like a small heart, not a corner dot"
+                )
 
 
 # ---------------------------------------------------------------------------
