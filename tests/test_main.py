@@ -170,7 +170,7 @@ def test_main_preview_on_birthday_differs_from_normal_day(tmp_path):
     main([
         "--config", str(EXAMPLE_CONFIG),
         "--preview", str(bday),
-        "--now", "2026-09-12T08:00:00-07:00",  # Lily's birthday
+        "--now", "2026-09-12T08:00:00-07:00",  # Lilah's birthday
     ])
     assert normal.read_bytes() != bday.read_bytes()
 

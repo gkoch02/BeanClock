@@ -55,7 +55,7 @@ def _ink_x_extent(img, y_range, x_range=None):
 
 
 def test_render_returns_two_planes_at_panel_size():
-    black, red = render("Lily", AGE, BORN)
+    black, red = render("Lilah", AGE, BORN)
     assert black.size == (WIDTH, HEIGHT)
     assert red.size == (WIDTH, HEIGHT)
     assert black.mode == "1"
@@ -65,13 +65,13 @@ def test_render_returns_two_planes_at_panel_size():
 
 
 def test_render_handles_newborn():
-    black, red = render("Lily", NEWBORN, BORN)
+    black, red = render("Lilah", NEWBORN, BORN)
     assert _has_ink(black)
 
 
 def test_render_flip_rotates_both_planes():
-    upright = render("Lily", AGE, BORN, flip=False)
-    flipped = render("Lily", AGE, BORN, flip=True)
+    upright = render("Lilah", AGE, BORN, flip=False)
+    flipped = render("Lilah", AGE, BORN, flip=True)
     assert upright[0].tobytes() != flipped[0].tobytes()
     assert upright[1].tobytes() != flipped[1].tobytes()
 
@@ -79,8 +79,8 @@ def test_render_flip_rotates_both_planes():
 def test_render_after_hours_inverts_black_only():
     """after_hours flips black/white but leaves red untouched, so the
     panel reads white-on-black with red beads still in place."""
-    normal = render("Lily", AGE, BORN)
-    inverted = render("Lily", AGE, BORN, after_hours=True)
+    normal = render("Lilah", AGE, BORN)
+    inverted = render("Lilah", AGE, BORN, after_hours=True)
     assert normal[0].tobytes() != inverted[0].tobytes()
     assert normal[1].tobytes() == inverted[1].tobytes()
 
@@ -89,8 +89,8 @@ def test_render_after_hours_makes_background_inked():
     """After inversion, what used to be the white panel background should
     now be inked on the black plane. Sample a margin pixel that's outside
     the frame and well clear of any glyphs."""
-    normal_black, _ = render("Lily", AGE, BORN)
-    inv_black, _ = render("Lily", AGE, BORN, after_hours=True)
+    normal_black, _ = render("Lilah", AGE, BORN)
+    inv_black, _ = render("Lilah", AGE, BORN, after_hours=True)
     np = normal_black.load()
     ip = inv_black.load()
     # (0, 0) is the very top-left corner — outside the rounded frame, so
@@ -105,8 +105,8 @@ def test_render_after_hours_punches_black_out_under_red_ink():
     naive 'invert all of black' would mask out red. Verify that wherever
     the red plane has ink, the inverted black plane is *not* inked, so
     red still shows through against the new black background."""
-    _, red = render("Lily", AGE, BORN)
-    inv_black, _ = render("Lily", AGE, BORN, after_hours=True)
+    _, red = render("Lilah", AGE, BORN)
+    inv_black, _ = render("Lilah", AGE, BORN, after_hours=True)
     rp = red.load()
     bp = inv_black.load()
     red_pixels = [
@@ -124,15 +124,15 @@ def test_render_after_hours_combines_with_flip():
     """flip and after_hours are independent and must compose. Inverted-
     then-flipped should differ from just-inverted, just-flipped, and
     plain renders."""
-    plain = render("Lily", AGE, BORN)[0].tobytes()
-    flipped = render("Lily", AGE, BORN, flip=True)[0].tobytes()
-    inverted = render("Lily", AGE, BORN, after_hours=True)[0].tobytes()
-    both = render("Lily", AGE, BORN, flip=True, after_hours=True)[0].tobytes()
+    plain = render("Lilah", AGE, BORN)[0].tobytes()
+    flipped = render("Lilah", AGE, BORN, flip=True)[0].tobytes()
+    inverted = render("Lilah", AGE, BORN, after_hours=True)[0].tobytes()
+    both = render("Lilah", AGE, BORN, flip=True, after_hours=True)[0].tobytes()
     assert len({plain, flipped, inverted, both}) == 4
 
 
 def test_compose_preview_is_rgb_panel_size():
-    black, red = render("Lily", AGE, BORN)
+    black, red = render("Lilah", AGE, BORN)
     p = compose_preview(black, red)
     assert p.size == (WIDTH, HEIGHT)
     assert p.mode == "RGB"
@@ -143,7 +143,7 @@ ACCENTS = ("heart", "star", "balloon", "moon", "sun", "flower")
 
 def test_render_accepts_known_accents():
     for accent in ACCENTS:
-        b, r = render("Lily", TWO_YEARS, BORN, accent=accent)
+        b, r = render("Lilah", TWO_YEARS, BORN, accent=accent)
         assert _has_ink(r)
 
 
@@ -152,7 +152,7 @@ def test_accents_produce_distinct_red_planes():
     regression (e.g. _ACCENTS.get always returning the default) would slip
     past the existing "ink exists" check."""
     planes = [
-        render("Lily", TWO_YEARS, BORN, accent=a)[1].tobytes() for a in ACCENTS
+        render("Lilah", TWO_YEARS, BORN, accent=a)[1].tobytes() for a in ACCENTS
     ]
     for i, a in enumerate(planes):
         for b in planes[i + 1 :]:
@@ -167,7 +167,7 @@ def test_text_clears_frame_pad_margin():
     rounded-corner arcs of the outer black hairline) and assert no black
     text ink in the top and bottom keep-out strips.
     """
-    black, _ = render("Lily", AGE, BORN)
+    black, _ = render("Lilah", AGE, BORN)
     bp = black.load()
 
     for y in range(2, FRAME_PAD):
@@ -183,7 +183,7 @@ def test_hero_auto_shrinks_to_stay_within_width_budget():
     A long hero like '99 years  11 months' should still center within the
     budgeted band (left edge >= 14, right edge <= WIDTH-14). We restrict
     the x search to skip the frame outline at x=1 and x=WIDTH-2."""
-    black, _ = render("Lily", LONG_AGE, BORN)
+    black, _ = render("Lilah", LONG_AGE, BORN)
     inner = range(10, WIDTH - 10)
     extent = _ink_x_extent(black, range(33, 62), inner)
     assert extent is not None, "expected hero ink"
@@ -197,7 +197,7 @@ def test_format_modes_produce_distinct_planes():
     regression that ignored the new field would slip past the per-format
     smoke checks below."""
     planes = {
-        fmt: render("Lily", AGE, BORN, age_format=fmt)[0].tobytes()
+        fmt: render("Lilah", AGE, BORN, age_format=fmt)[0].tobytes()
         for fmt in ("extended", "days", "hours", "full")
     }
     assert planes["extended"] != planes["days"]
@@ -212,8 +212,8 @@ def test_format_full_adds_ink_in_bottom_corners():
     the bottom-left and bottom-right of the black plane. The two corners
     must gain ink relative to plain extended; otherwise the totals aren't
     actually being painted."""
-    extended_black, _ = render("Lily", AGE, BORN, age_format="extended")
-    full_black, _ = render("Lily", AGE, BORN, age_format="full")
+    extended_black, _ = render("Lilah", AGE, BORN, age_format="extended")
+    full_black, _ = render("Lilah", AGE, BORN, age_format="full")
     footer_band = range(HEIGHT - FRAME_PAD - 13, HEIGHT - FRAME_PAD)
     left = range(10, 60)
     right = range(WIDTH - 60, WIDTH - 10)
@@ -236,8 +236,8 @@ def test_format_full_uses_total_fields_not_calendar():
     plane (where the hero/sub above is identical)."""
     big = AgeBreakdown(3, 7, 15, 4, total_days=1324, total_hours=31780)
     small = AgeBreakdown(3, 7, 15, 4, total_days=42, total_hours=999)
-    big_black, _ = render("Lily", big, BORN, age_format="full")
-    small_black, _ = render("Lily", small, BORN, age_format="full")
+    big_black, _ = render("Lilah", big, BORN, age_format="full")
+    small_black, _ = render("Lilah", small, BORN, age_format="full")
     assert big_black.tobytes() != small_black.tobytes()
 
 
@@ -246,8 +246,8 @@ def test_format_full_preserves_extended_hero_and_sub():
     band (y=33..62) and sub band (y=68..86) must be byte-identical so
     layout regressions in the upper region get caught here rather than
     drowning in the bottom-corner diff."""
-    extended_black, _ = render("Lily", AGE, BORN, age_format="extended")
-    full_black, _ = render("Lily", AGE, BORN, age_format="full")
+    extended_black, _ = render("Lilah", AGE, BORN, age_format="extended")
+    full_black, _ = render("Lilah", AGE, BORN, age_format="full")
     ep = extended_black.load()
     fp = full_black.load()
     for y in list(range(33, 62)) + list(range(68, 86)):
@@ -264,8 +264,8 @@ def test_format_days_short_circuits_zero_to_newborn():
     into the newborn branch, so their hero text — and thus the black
     plane below the header — should be identical."""
     fresh = AgeBreakdown(0, 0, 0, 0, total_days=0, total_hours=0)
-    days_black, _ = render("Lily", fresh, BORN, age_format="days")
-    hours_black, _ = render("Lily", fresh, BORN, age_format="hours")
+    days_black, _ = render("Lilah", fresh, BORN, age_format="days")
+    hours_black, _ = render("Lilah", fresh, BORN, age_format="hours")
     assert days_black.tobytes() == hours_black.tobytes()
 
 
@@ -276,8 +276,8 @@ def test_format_days_uses_total_days_not_calendar_days():
     calendar-days input — pin the distinction."""
     big = AgeBreakdown(0, 0, 15, 0, total_days=1324, total_hours=31780)
     small = AgeBreakdown(0, 0, 15, 0, total_days=15, total_hours=360)
-    big_black, _ = render("Lily", big, BORN, age_format="days")
-    small_black, _ = render("Lily", small, BORN, age_format="days")
+    big_black, _ = render("Lilah", big, BORN, age_format="days")
+    small_black, _ = render("Lilah", small, BORN, age_format="days")
     assert big_black.tobytes() != small_black.tobytes()
 
 
@@ -285,17 +285,17 @@ def test_special_hero_replaces_normal_hero():
     """In special-day mode the hero text is the override string, and the
     standard "Y years M months" phrasing is demoted to the sub line — so
     the black plane must differ from the non-special render."""
-    plain = render("Lily", AGE, BORN)[0].tobytes()
-    special = render("Lily", AGE, BORN, special="Happy 4th Birthday!")[0].tobytes()
+    plain = render("Lilah", AGE, BORN)[0].tobytes()
+    special = render("Lilah", AGE, BORN, special="Happy 4th Birthday!")[0].tobytes()
     assert plain != special
 
 
 def test_special_overrides_days_format():
     """Special days take over regardless of age_format. Pin this so a future
     refactor doesn't accidentally restore the days/hours hero on a milestone."""
-    days = render("Lily", AGE, BORN, age_format="days")[0].tobytes()
+    days = render("Lilah", AGE, BORN, age_format="days")[0].tobytes()
     special = render(
-        "Lily", AGE, BORN, age_format="days", special="1000 days!"
+        "Lilah", AGE, BORN, age_format="days", special="1000 days!"
     )[0].tobytes()
     assert days != special
 
@@ -303,7 +303,7 @@ def test_special_overrides_days_format():
 def test_special_long_label_respects_width_budget():
     """'Happy 99th Birthday!' must shrink rather than overflow the frame —
     the same shrink loop the standard hero relies on."""
-    black, _ = render("Lily", LONG_AGE, BORN, special="Happy 99th Birthday!")
+    black, _ = render("Lilah", LONG_AGE, BORN, special="Happy 99th Birthday!")
     inner = range(10, WIDTH - 10)
     extent = _ink_x_extent(black, range(33, 62), inner)
     assert extent is not None
@@ -525,8 +525,8 @@ def test_draw_frame_heart_uses_corner_dots_not_small_hearts():
 def test_after_hours_punches_black_under_red_all_accents(accent):
     """For every accent, red ink must not be masked by the inverted black plane.
     Accent-specific branches in _draw_frame mean regressions can be accent-local."""
-    _, red = render("Lily", AGE, BORN, accent=accent)
-    inv_black, _ = render("Lily", AGE, BORN, accent=accent, after_hours=True)
+    _, red = render("Lilah", AGE, BORN, accent=accent)
+    inv_black, _ = render("Lilah", AGE, BORN, accent=accent, after_hours=True)
     rp = red.load()
     bp = inv_black.load()
     red_pixels = [(x, y) for y in range(HEIGHT) for x in range(WIDTH) if rp[x, y] == 0]
