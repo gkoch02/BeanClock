@@ -1,7 +1,32 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
+
+import pytest
+from PIL import Image, ImageDraw
 
 from kidage.age import AgeBreakdown
-from kidage.render import FRAME_PAD, HEIGHT, WIDTH, compose_preview, render
+from kidage.render import (
+    FRAME_BEAD_INSET,
+    FRAME_OUTER,
+    FRAME_PAD,
+    HEIGHT,
+    WIDTH,
+    _draw_balloon,
+    _draw_bead,
+    _draw_centered,
+    _draw_corner_dot,
+    _draw_flower,
+    _draw_frame,
+    _draw_heart,
+    _draw_moon,
+    _draw_star,
+    _draw_sun,
+    _font,
+    _format_birthday,
+    _hero_line,
+    _sub_line,
+    compose_preview,
+    render,
+)
 
 PT = timezone(timedelta(hours=-7))
 BORN = datetime(2022, 9, 12, 3, 47, tzinfo=PT)
@@ -292,10 +317,221 @@ def test_long_hero_would_overflow_at_default_size():
     path: '99 years  11 months' at 28pt Bold must exceed WIDTH-28. If the
     font ever changes to narrower glyphs and this stops being true, the
     budget test no longer proves shrink works — pick a longer input."""
-    from PIL import Image, ImageDraw
-
-    from kidage.render import _font, _text_width
+    from kidage.render import _text_width
 
     bd = ImageDraw.Draw(Image.new("1", (WIDTH, HEIGHT), 1))
     f28 = _font(28, "Bold")
     assert _text_width(bd, "99 years  11 months", f28) > WIDTH - 28
+
+
+# ---------------------------------------------------------------------------
+# _format_birthday
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("born_at,expected", [
+    (datetime(2022, 9, 1, tzinfo=UTC), "Sep 1, 2022"),
+    (datetime(2022, 9, 12, tzinfo=UTC), "Sep 12, 2022"),
+    (datetime(2020, 12, 25, tzinfo=UTC), "Dec 25, 2020"),
+    (datetime(2020, 2, 29, tzinfo=UTC), "Feb 29, 2020"),
+])
+def test_format_birthday(born_at, expected):
+    assert _format_birthday(born_at) == expected
+
+
+# ---------------------------------------------------------------------------
+# _hero_line
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("age,expected", [
+    (AgeBreakdown(0, 0, 0, 0, 0, 0), "newborn"),
+    (AgeBreakdown(0, 1, 0, 0, 0, 0), "1 month"),
+    (AgeBreakdown(0, 5, 0, 0, 0, 0), "5 months"),
+    (AgeBreakdown(1, 0, 0, 0, 365, 8760), "1 year  0 months"),
+    (AgeBreakdown(3, 7, 15, 4, 1324, 31780), "3 years  7 months"),
+])
+def test_hero_line(age, expected):
+    assert _hero_line(age) == expected
+
+
+# ---------------------------------------------------------------------------
+# _sub_line
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("age,expected", [
+    (AgeBreakdown(0, 0, 0, 0, 0, 0), "0 days  ·  0 hours"),
+    (AgeBreakdown(0, 0, 1, 1, 0, 0), "1 day  ·  1 hour"),
+    (AgeBreakdown(3, 7, 15, 4, 0, 0), "15 days  ·  4 hours"),
+])
+def test_sub_line(age, expected):
+    assert _sub_line(age) == expected
+
+
+# ---------------------------------------------------------------------------
+# _draw_centered
+# ---------------------------------------------------------------------------
+
+
+def test_draw_centered_horizontally_centers_text():
+    img = Image.new("1", (WIDTH, HEIGHT), 1)
+    draw = ImageDraw.Draw(img)
+    font = _font(20, "Regular")
+    _draw_centered(draw, 40, "hello world", font)
+    px = img.load()
+    inked_xs = [x for x in range(WIDTH) for y in range(35, 75) if px[x, y] == 0]
+    assert inked_xs, "expected text ink after _draw_centered"
+    visual_center = (min(inked_xs) + max(inked_xs)) / 2
+    assert abs(visual_center - WIDTH / 2) < 5, (
+        f"text center {visual_center:.1f} is not near panel center {WIDTH / 2}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Accent drawing primitives
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("fn,size", [
+    (_draw_heart, 9),
+    (_draw_star, 8),
+    (_draw_balloon, 10),
+    (_draw_moon, 8),
+    (_draw_sun, 8),
+    (_draw_flower, 7),
+])
+def test_accent_fn_paints_ink_near_center(fn, size):
+    cx, cy = 50, 50
+    img = Image.new("1", (120, 120), 1)
+    draw = ImageDraw.Draw(img)
+    fn(draw, cx, cy, size=size)
+    px = img.load()
+    # Generous bounding box: 2× size + tail room for balloon string
+    margin = size * 2 + 6
+    inked = [
+        (x, y)
+        for x in range(max(0, cx - margin), min(120, cx + margin + 1))
+        for y in range(max(0, cy - margin), min(120, cy + margin + 1))
+        if px[x, y] == 0
+    ]
+    assert inked, f"{fn.__name__} painted no ink in the expected region"
+
+
+def test_draw_bead_paints_small_dot():
+    cx, cy = 20, 20
+    img = Image.new("1", (50, 50), 1)
+    draw = ImageDraw.Draw(img)
+    _draw_bead(draw, cx, cy)
+    px = img.load()
+    inked = [(x, y) for x in range(50) for y in range(50) if px[x, y] == 0]
+    assert inked, "bead painted no ink"
+    for x, y in inked:
+        assert abs(x - cx) <= 2 and abs(y - cy) <= 2, (
+            f"bead ink at ({x},{y}) is outside radius-1 ellipse from ({cx},{cy})"
+        )
+
+
+def test_draw_corner_dot_paints_small_dot():
+    cx, cy = 20, 20
+    img = Image.new("1", (50, 50), 1)
+    draw = ImageDraw.Draw(img)
+    _draw_corner_dot(draw, cx, cy)
+    px = img.load()
+    inked = [(x, y) for x in range(50) for y in range(50) if px[x, y] == 0]
+    assert inked, "corner dot painted no ink"
+    for x, y in inked:
+        assert abs(x - cx) <= 3 and abs(y - cy) <= 3, (
+            f"corner dot ink at ({x},{y}) is outside radius-2 ellipse from ({cx},{cy})"
+        )
+
+
+def test_draw_corner_dot_is_larger_than_bead():
+    """corner_dot (radius 2) must cover more pixels than bead (radius 1)."""
+    img_bead = Image.new("1", (50, 50), 1)
+    img_dot = Image.new("1", (50, 50), 1)
+    cx, cy = 20, 20
+    _draw_bead(ImageDraw.Draw(img_bead), cx, cy)
+    _draw_corner_dot(ImageDraw.Draw(img_dot), cx, cy)
+    bp = img_bead.load()
+    dp = img_dot.load()
+    bead_count = sum(1 for x in range(50) for y in range(50) if bp[x, y] == 0)
+    dot_count = sum(1 for x in range(50) for y in range(50) if dp[x, y] == 0)
+    assert dot_count > bead_count
+
+
+# ---------------------------------------------------------------------------
+# _draw_frame
+# ---------------------------------------------------------------------------
+
+
+def _make_frame_pair(accent, accent_fn):
+    black = Image.new("1", (WIDTH, HEIGHT), 1)
+    red = Image.new("1", (WIDTH, HEIGHT), 1)
+    _draw_frame(ImageDraw.Draw(black), ImageDraw.Draw(red), accent, accent_fn)
+    return black, red
+
+
+def test_draw_frame_outer_black_border_on_all_four_sides():
+    black, _ = _make_frame_pair("star", _draw_star)
+    bp = black.load()
+    mid_x, mid_y = WIDTH // 2, HEIGHT // 2
+    assert bp[mid_x, FRAME_OUTER] == 0, "top border missing"
+    assert bp[mid_x, HEIGHT - 1 - FRAME_OUTER] == 0, "bottom border missing"
+    assert bp[FRAME_OUTER, mid_y] == 0, "left border missing"
+    assert bp[WIDTH - 1 - FRAME_OUTER, mid_y] == 0, "right border missing"
+
+
+def test_draw_frame_red_beads_on_all_four_rails():
+    _, red = _make_frame_pair("star", _draw_star)
+    rp = red.load()
+    inset = FRAME_BEAD_INSET
+    assert any(rp[x, inset] == 0 for x in range(WIDTH)), "no red beads on top rail"
+    assert any(rp[x, HEIGHT - 1 - inset] == 0 for x in range(WIDTH)), "no red beads on bottom rail"
+    assert any(rp[inset, y] == 0 for y in range(HEIGHT)), "no red beads on left rail"
+    assert any(rp[WIDTH - 1 - inset, y] == 0 for y in range(HEIGHT)), "no red beads on right rail"
+
+
+def test_draw_frame_heart_uses_corner_dots_not_small_hearts():
+    """Heart accent must use corner dots (not small hearts) in frame corners.
+
+    _draw_heart(size=4) places a polygon tip at cy+4 along the center column.
+    _draw_corner_dot(radius=2) only reaches cy+2. Pixels at cy+3 and cy+4
+    distinguish the two: a regression that switches back to small hearts inks
+    those pixels; corner dots leave them blank.
+
+    Bead rails and the outer border don't touch these positions: beads are
+    clamped to x in [19, 230] while the corner x values are 9 and 240.
+    """
+    corners = ((9, 9), (WIDTH - 10, 9), (9, HEIGHT - 10), (WIDTH - 10, HEIGHT - 10))
+    _, red = _make_frame_pair("heart", _draw_heart)
+    rp = red.load()
+    for cx, cy in corners:
+        for dy in (3, 4):
+            y = cy + dy
+            if 0 <= y < HEIGHT:
+                assert rp[cx, y] == 1, (
+                    f"corner ({cx},{cy}): pixel ({cx},{y}) is inked — "
+                    "looks like a small heart, not a corner dot"
+                )
+
+
+# ---------------------------------------------------------------------------
+# after_hours × all accents
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("accent", ACCENTS)
+def test_after_hours_punches_black_under_red_all_accents(accent):
+    """For every accent, red ink must not be masked by the inverted black plane.
+    Accent-specific branches in _draw_frame mean regressions can be accent-local."""
+    _, red = render("Lily", AGE, BORN, accent=accent)
+    inv_black, _ = render("Lily", AGE, BORN, accent=accent, after_hours=True)
+    rp = red.load()
+    bp = inv_black.load()
+    red_pixels = [(x, y) for y in range(HEIGHT) for x in range(WIDTH) if rp[x, y] == 0]
+    assert red_pixels, f"accent={accent!r}: expected red ink"
+    for x, y in red_pixels:
+        assert bp[x, y] == 1, (
+            f"accent={accent!r}: black plane masks red pixel ({x},{y})"
+        )
