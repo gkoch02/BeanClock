@@ -34,6 +34,12 @@ the age is spelled out. A spread:
   phrasing slides to the sub line.
 - Single TOML config file for the kid's name, birth datetime+timezone, wake
   window, and accent glyph.
+- **After-hours inversion** — after sunset (computed from your
+  `latitude`/`longitude` using a built-in NOAA algorithm, no network or API
+  key needed) the black plane inverts to white-on-black so the display reads
+  more comfortably in a dark room; red accents stay red. Inversion only fires
+  within the configured wake window — deep-night hours still skip the refresh
+  entirely.
 - Once-a-day full clear to suppress ghosting; the other ~14 daily refreshes
   go straight to `display()` for less flicker.
 - Pure-Python, vendored Waveshare driver — no apt-time setup beyond Pillow's
@@ -85,14 +91,27 @@ wake_hour  = 7    # inclusive, local time of first daily update
 sleep_hour = 21   # inclusive, local time of last daily update
 
 [display]
-flip   = false      # rotate 180° if the ribbon comes out the other side
-accent = "heart"    # heart | star | balloon | moon | sun | flower
-format = "extended" # extended (years/months + days/hours) | days | hours | full
+flip               = false      # rotate 180° if the ribbon comes out the other side
+accent             = "heart"    # heart | star | balloon | moon | sun | flower
+format             = "extended" # extended (years/months + days/hours) | days | hours | full
+after_hours_invert = true       # invert to white-on-black after sunset (requires [location])
+
+[location]
+# Decimal degrees — used to compute today's sunset for after_hours_invert.
+# Omit this whole block (and set after_hours_invert = false) to disable.
+latitude  = 37.2872
+longitude = -121.9500
 
 [special_days]
 birthday   = true                          # hero swaps to "Happy Nth Birthday!"
 milestones = [100, 500, 1000, 2000, 5000]  # hero swaps to "N days!"; [] disables
 ```
+
+When `after_hours_invert = true` the panel switches to white-on-black after
+today's local sunset, computed on-device from `latitude`/`longitude` (NOAA
+algorithm, no network needed). Red beads and accents remain red. The inversion
+only fires within the `[wake_hour, sleep_hour]` window; deep-night hours still
+skip the refresh entirely.
 
 On a matching day the hero row is replaced and the standard age phrasing
 slides to the sub line, regardless of `display.format`. Feb 29 births
@@ -120,13 +139,15 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e '.[dev]'
 
-pytest                                       # 91 tests, no panel needed
+pytest                                       # 123 tests, no panel needed
 python -m kidage --config config.example.toml --preview /tmp/p.png
 xdg-open /tmp/p.png                          # eyeball the layout
 ```
 
 `--now 2026-04-27T07:00:00-07:00` lets you simulate any moment without
-touching the system clock.
+touching the system clock. `--after-hours` forces the inverted
+(white-on-black) look for layout work without waiting for sunset; combine
+both flags for deterministic screenshots of the night-mode layout.
 
 ## Repo layout
 
