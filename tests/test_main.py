@@ -383,7 +383,7 @@ def _after_hours_config(tmp_path: Path) -> Path:
         '[schedule]\nwake_hour = 7\nsleep_hour = 21\n'
         '[display]\n'
         'after_hours_invert = true\n'
-        '[location]\nlatitude = 37.2872\nlongitude = -121.95\n'
+        '[location]\nlatitude = 40.0150\nlongitude = -105.2705\n'
     )
     return cfg
 

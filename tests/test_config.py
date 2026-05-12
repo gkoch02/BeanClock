@@ -148,12 +148,12 @@ born_at = 2024-01-01T00:00:00+00:00
 [display]
 after_hours_invert = true
 [location]
-latitude = 37.2872
-longitude = -121.95
+latitude = 40.0150
+longitude = -105.2705
 """))
     assert cfg.after_hours_invert is True
-    assert cfg.latitude == 37.2872
-    assert cfg.longitude == -121.95
+    assert cfg.latitude == 40.0150
+    assert cfg.longitude == -105.2705
 
 
 def test_after_hours_invert_requires_location(tmp_path):
@@ -174,7 +174,7 @@ def test_location_requires_both_lat_and_lon(tmp_path):
 name = "X"
 born_at = 2024-01-01T00:00:00+00:00
 [location]
-latitude = 37.2872
+latitude = 40.0150
 """)
     with pytest.raises(ValueError, match="set together"):
         load(p)

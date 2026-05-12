@@ -108,8 +108,8 @@ after_hours_invert = true       # invert to white-on-black after sunset (require
 [location]
 # Decimal degrees — used to compute today's sunset for after_hours_invert.
 # Omit this whole block (and set after_hours_invert = false) to disable.
-latitude  = 37.2872
-longitude = -121.9500
+latitude  = 40.0150
+longitude = -105.2705
 
 [special_days]
 birthday   = true                          # hero swaps to "Happy Nth Birthday!"
