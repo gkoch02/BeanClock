@@ -2,50 +2,50 @@ from datetime import UTC, date, datetime, timedelta, timezone
 
 from kidage.solar import sun_times
 
-PDT = timezone(timedelta(hours=-7))
-PST = timezone(timedelta(hours=-8))
+MDT = timezone(timedelta(hours=-6))
+MST = timezone(timedelta(hours=-7))
 
 
 def _within(actual: datetime, expected: datetime, tolerance_seconds: int) -> bool:
     return abs((actual - expected).total_seconds()) <= tolerance_seconds
 
 
-def test_san_jose_summer_solstice():
-    """NOAA solar calculator gives San Jose, CA on 2026-06-21:
-    sunrise ~05:48 PDT, sunset ~20:32 PDT. Allow 2 minutes of slack
+def test_boulder_summer_solstice():
+    """NOAA solar calculator gives Boulder, CO on 2026-06-21:
+    sunrise ~05:32 MDT, sunset ~20:33 MDT. Allow 2 minutes of slack
     against the simplified equation."""
-    sunrise, sunset = sun_times(date(2026, 6, 21), 37.2872, -121.9500)
+    sunrise, sunset = sun_times(date(2026, 6, 21), 40.0150, -105.2705)
     assert _within(
-        sunrise.astimezone(PDT),
-        datetime(2026, 6, 21, 5, 48, tzinfo=PDT),
+        sunrise.astimezone(MDT),
+        datetime(2026, 6, 21, 5, 32, tzinfo=MDT),
         120,
     )
     assert _within(
-        sunset.astimezone(PDT),
-        datetime(2026, 6, 21, 20, 32, tzinfo=PDT),
+        sunset.astimezone(MDT),
+        datetime(2026, 6, 21, 20, 33, tzinfo=MDT),
         120,
     )
 
 
-def test_san_jose_winter_solstice():
-    """Pin the other extreme: 2026-12-21 sunrise ~07:18 PST,
-    sunset ~16:53 PST. Catches sign errors in the declination math
+def test_boulder_winter_solstice():
+    """Pin the other extreme: 2026-12-21 sunrise ~07:20 MST,
+    sunset ~16:39 MST. Catches sign errors in the declination math
     that summer alone wouldn't surface."""
-    sunrise, sunset = sun_times(date(2026, 12, 21), 37.2872, -121.9500)
+    sunrise, sunset = sun_times(date(2026, 12, 21), 40.0150, -105.2705)
     assert _within(
-        sunrise.astimezone(PST),
-        datetime(2026, 12, 21, 7, 18, tzinfo=PST),
+        sunrise.astimezone(MST),
+        datetime(2026, 12, 21, 7, 20, tzinfo=MST),
         120,
     )
     assert _within(
-        sunset.astimezone(PST),
-        datetime(2026, 12, 21, 16, 53, tzinfo=PST),
+        sunset.astimezone(MST),
+        datetime(2026, 12, 21, 16, 39, tzinfo=MST),
         120,
     )
 
 
 def test_returns_utc_aware_datetimes():
-    sunrise, sunset = sun_times(date(2026, 4, 27), 37.2872, -121.9500)
+    sunrise, sunset = sun_times(date(2026, 4, 27), 40.0150, -105.2705)
     assert sunrise.tzinfo is UTC
     assert sunset.tzinfo is UTC
     assert sunrise < sunset

@@ -23,11 +23,11 @@ after_hours_invert = true
 
 [location]
 # Latitude/longitude in decimal degrees, used by display.after_hours_invert
-# to compute today's sunset. Defaults are San Jose, CA — change to your
-# actual location. Omit the whole block (and set after_hours_invert =
-# false above) to disable the after-hours feature.
-latitude = 37.2872
-longitude = -121.9500
+# to compute today's sunset. Example values point to Boulder, CO — change
+# to your actual location. Omit the whole block (and set after_hours_invert
+# = false above) to disable the after-hours feature.
+latitude = 40.0150
+longitude = -105.2705
 
 [special_days]
 # Show "Happy Nth Birthday!" on the kid's birthday (Feb 29 falls back to
