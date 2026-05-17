@@ -105,8 +105,14 @@ lands near the limit.
 
 **After-hours inversion.** When `display.after_hours_invert = true` and
 `[location]` lat/long are set, `__main__` calls `kidage.solar.sun_times()`
-on the live wall-clock date and passes `after_hours = now >= sunset` into
-`render()`. `render()` swaps the black plane (0 ↔ 1) so the panel reads
+on the live wall-clock date and passes
+`after_hours = now + 30min >= sunset` into `render()`. The 30-min
+look-ahead — rather than a naïve `now >= sunset` — is what stops the
+panel from sitting on a stale day-mode image for up to ~50 min when
+sunset falls mid-hour (the timer only fires hourly, so the refresh that
+lands just before sunset has to decide for the whole upcoming hour). The
+midpoint flips the panel dark when >half of the upcoming hour will be
+post-sunset. `render()` swaps the black plane (0 ↔ 1) so the panel reads
 white-on-black, **then punches black back out wherever the red plane has
 ink** — the Waveshare driver ORs the two planes onto the panel, so a
 uniformly-black plane would otherwise mask out every red bead/accent. The
