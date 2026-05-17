@@ -457,6 +457,54 @@ def test_live_after_hours_inverts_when_past_sunset(tmp_path, monkeypatch):
     assert inverted_black.tobytes() != normal_black.tobytes()
 
 
+def test_live_after_hours_inverts_in_the_hour_before_sunset(tmp_path, monkeypatch):
+    """The panel only refreshes hourly; if `now >= sunset` were the only
+    check, a refresh that lands 8 min before sunset would render day mode
+    and leave the panel stale for the ~52 min after sunset until the next
+    refresh. The 30-min look-ahead must flip after_hours True in that
+    window so the panel is dark during the actually-dark part of the hour.
+    """
+    cfg = _after_hours_config(tmp_path)
+
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+    from datetime import timezone as _tz
+    # Sunset at 20:08 PDT — the canonical "mid-hour sunset" case that
+    # exposed the bug in the wild.
+    fake_sunset = _dt(2026, 5, 17, 3, 8, tzinfo=UTC)
+    fake_sunrise = _dt(2026, 5, 16, 12, 45, tzinfo=UTC)
+    monkeypatch.setattr(
+        "kidage.solar.sun_times",
+        lambda d, lat, lon: (fake_sunrise, fake_sunset),
+    )
+
+    PT = _tz(_td(hours=-7))
+    monkeypatch.setattr("kidage.__main__._system_zone", lambda: PT)
+
+    # 20:00 PDT — 8 min before sunset, but the panel won't refresh again
+    # for an hour, so the majority of this hour will be post-sunset.
+    class JustBeforeSunset(_dt):
+        @classmethod
+        def now(cls, tz=None):
+            return _dt(2026, 5, 16, 20, 0, tzinfo=tz)
+    monkeypatch.setattr("kidage.__main__.datetime", JustBeforeSunset)
+    pre_calls = _called_show(monkeypatch)
+    assert main(["--config", str(cfg)]) == 0
+    near_sunset_black = pre_calls[0][0]
+
+    # Noon refresh on the same setup — day mode, for comparison.
+    class Noon(_dt):
+        @classmethod
+        def now(cls, tz=None):
+            return _dt(2026, 5, 16, 12, 0, tzinfo=tz)
+    monkeypatch.setattr("kidage.__main__.datetime", Noon)
+    noon_calls = _called_show(monkeypatch)
+    assert main(["--config", str(cfg)]) == 0
+    noon_black = noon_calls[0][0]
+
+    assert near_sunset_black.tobytes() != noon_black.tobytes()
+
+
 def test_quiet_preview_via_cli_flag_changes_render(tmp_path):
     """--quiet forces the quiet layout regardless of --now / sleep_hour, so
     layout previews don't have to wait until 21:00."""

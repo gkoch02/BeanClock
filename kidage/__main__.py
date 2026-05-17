@@ -4,7 +4,7 @@ import argparse
 import logging
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from importlib import metadata
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -168,7 +168,12 @@ def main(argv: list[str] | None = None) -> int:
         times = sun_times(now.date(), cfg.latitude, cfg.longitude)
         if times is not None:
             sunset_local = times[1].astimezone(now.tzinfo)
-            after_hours = now >= sunset_local
+            # Look 30 min ahead, not at `now` itself: the panel only refreshes
+            # hourly, so a naïve `now >= sunset` leaves a stale day-mode image
+            # on the panel for up to ~50 min when sunset falls mid-hour. The
+            # 30-min midpoint flips the panel dark when >half of the upcoming
+            # hour will be post-sunset.
+            after_hours = now + timedelta(minutes=30) >= sunset_local
             log.info(
                 "sunset=%s after_hours=%s",
                 sunset_local.isoformat(), after_hours,
