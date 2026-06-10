@@ -22,7 +22,6 @@ dev = [
     "pytest-cov>=5",
     "ruff>=0.6",
     "mypy>=1.10",
-    "types-Pillow",
     "types-python-dateutil",
 ]
 

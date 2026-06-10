@@ -21,13 +21,12 @@ _HORIZON_DEG = -0.83
 _OBLIQUITY_DEG = 23.4397
 
 
-def sun_times(
-    d: date, lat: float, lon: float
-) -> tuple[datetime, datetime] | None:
-    """Return (sunrise_utc, sunset_utc) for date `d` at (lat, lon).
+def _transit_and_hour_angle_cos(d: date, lat: float, lon: float) -> tuple[float, float]:
+    """Return (j_transit, cos_omega) for date `d` at (lat, lon).
 
-    Returns None during polar day or polar night (the sun never crosses the
-    horizon at the given latitude/date).
+    j_transit is the Julian-day offset (from J2000) of local solar noon;
+    cos_omega is the cosine of the sunrise/sunset hour angle. |cos_omega| > 1
+    means the sun never crosses the horizon that day (polar day or night).
     """
     # Days from J2000 (noon UT on 2000-01-01) to mean solar noon on date `d`
     # at this longitude. (Solar noon at longitude L happens lon/360 days
@@ -61,6 +60,19 @@ def sun_times(
     cos_omega = (
         math.sin(math.radians(_HORIZON_DEG)) - math.sin(lat_rad) * sin_decl
     ) / (math.cos(lat_rad) * math.cos(decl_rad))
+    return j_transit, cos_omega
+
+
+def sun_times(
+    d: date, lat: float, lon: float
+) -> tuple[datetime, datetime] | None:
+    """Return (sunrise_utc, sunset_utc) for date `d` at (lat, lon).
+
+    Returns None during polar day or polar night (the sun never crosses the
+    horizon at the given latitude/date); use polar_night() to tell the two
+    apart.
+    """
+    j_transit, cos_omega = _transit_and_hour_angle_cos(d, lat, lon)
     if cos_omega < -1.0 or cos_omega > 1.0:
         return None
     omega_deg = math.degrees(math.acos(cos_omega))
@@ -68,3 +80,14 @@ def sun_times(
     sunrise = _J2000 + timedelta(days=j_transit - omega_deg / 360.0)
     sunset = _J2000 + timedelta(days=j_transit + omega_deg / 360.0)
     return sunrise, sunset
+
+
+def polar_night(d: date, lat: float, lon: float) -> bool:
+    """True when the sun stays below the horizon for all of date `d`.
+
+    Companion to sun_times() returning None: cos_omega > 1 means the disk
+    never reaches the horizon (polar night), cos_omega < -1 means it never
+    drops below it (polar day).
+    """
+    _, cos_omega = _transit_and_hour_angle_cos(d, lat, lon)
+    return cos_omega > 1.0

@@ -26,13 +26,13 @@ FONT_PATH = Path(__file__).resolve().parent / "fonts" / "Fredoka.ttf"
 
 def _font(size: int, weight: str = "Regular") -> ImageFont.FreeTypeFont:
     f = ImageFont.truetype(str(FONT_PATH), size=size)
-    f.set_variation_by_name(weight)  # type: ignore[no-untyped-call]
+    f.set_variation_by_name(weight)
     return f
 
 
 def _text_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont) -> int:
     left, _, right, _ = draw.textbbox((0, 0), text, font=font)
-    return right - left
+    return int(right - left)
 
 
 def _draw_centered(
@@ -41,8 +41,11 @@ def _draw_centered(
     text: str,
     font: ImageFont.FreeTypeFont,
 ) -> None:
-    w = _text_width(draw, text, font)
-    draw.text(((WIDTH - w) // 2, y), text, font=font, fill=0)
+    # Anchor on the glyph bbox, not the draw origin: glyphs with a left
+    # bearing would otherwise sit a pixel or two right of true center.
+    left, _, right, _ = draw.textbbox((0, 0), text, font=font)
+    w = right - left
+    draw.text((int((WIDTH - w) // 2 - left), y), text, font=font, fill=0)
 
 
 def _hero_line(age: AgeBreakdown) -> str:
@@ -152,6 +155,13 @@ FRAME_PAD = 9              # min y-distance from text to the panel edge
 HERO_Y_TWO_LINE = 33
 HERO_Y_ONE_LINE = 47
 
+# Header width budget. The accents flank the header text at ±14px from its
+# edges and extend ~9px past their centers; keeping the centers at x >= 23
+# clears the frame's corner glyphs (centered at x=9) and bead rails on both
+# sides, so the text itself may be at most WIDTH - 2*(14 + 23) wide. Names
+# that still exceed the budget at the 14pt floor render without accents.
+HEADER_MAX_WIDTH = WIDTH - 74
+
 
 def _draw_bead(draw: ImageDraw.ImageDraw, cx: int, cy: int) -> None:
     draw.ellipse((cx - 1, cy - 1, cx + 1, cy + 1), fill=0)
@@ -221,16 +231,25 @@ def render(
 
     _draw_frame(bd, rd, accent, accent_fn)
 
-    header_font = _font(20, "Medium")
+    # Long names shrink the same way the hero does (2pt steps, 14pt floor)
+    # so the row stays inside the accent/frame budget instead of colliding
+    # with the corner glyphs or clipping off-panel.
     header = f"{name} is"
+    header_size = 20
+    header_font = _font(header_size, "Medium")
     hw = _text_width(rd, header, header_font)
+    while hw > HEADER_MAX_WIDTH and header_size > 14:
+        header_size -= 2
+        header_font = _font(header_size, "Medium")
+        hw = _text_width(rd, header, header_font)
     hx = (WIDTH - hw) // 2
     hy = FRAME_PAD
     rd.text((hx, hy), header, font=header_font, fill=0)
 
-    accent_y = hy + 10
-    accent_fn(rd, hx - 14, accent_y)
-    accent_fn(rd, hx + hw + 14, accent_y)
+    if hw <= HEADER_MAX_WIDTH:
+        accent_y = hy + 10
+        accent_fn(rd, hx - 14, accent_y)
+        accent_fn(rd, hx + hw + 14, accent_y)
 
     if quiet:
         # Last refresh before sleep_hour: the panel will freeze on this image

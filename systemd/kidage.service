@@ -1,6 +1,5 @@
 [Unit]
 Description=Render and push kid age to e-paper
-After=network-online.target
 
 [Service]
 Type=oneshot
@@ -13,3 +12,11 @@ SupplementaryGroups=spi gpio
 StateDirectory=kidage
 StandardOutput=journal
 StandardError=journal
+# Hardening. The service only needs to read /opt/kidage + /etc/kidage, write
+# /var/lib/kidage (granted through StateDirectory), and open the SPI/GPIO
+# device nodes — so the rest of the filesystem stays read-only or hidden.
+# Don't add PrivateDevices: it would mask /dev/spidev* and /dev/gpiomem.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true

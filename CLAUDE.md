@@ -64,6 +64,9 @@ The other ~14 hourly refreshes go straight to `epd.display()`, which avoids
 the tri-color panel's full inversion flicker. To force a clear on the next
 run, delete that file. The state directory is overridable via
 `KIDAGE_STATE_DIR` (the `systemd` unit sets it via `StateDirectory=kidage`).
+`epd.sleep()` runs in a `finally:` — it's the only call that drops the
+panel's drive voltage and releases SPI/GPIO (`epdconfig.module_exit`), so
+a failed `Clear()`/`display()` must not skip it.
 
 **Variable font.** `kidage/fonts/Fredoka.ttf` is a single variable TTF with weight
 and width axes. `render._font(size, weight)` calls
@@ -101,26 +104,33 @@ the bottom-left and bottom-right corners, sharing the footer row with
 the centered red "since …" string. The hero font auto-shrinks in 2pt
 steps down to 16pt if the string would overflow `WIDTH - 28`; preserve
 that shrink loop when changing strings, since "31756 hours" already
-lands near the limit.
+lands near the limit. The header row has its own shrink loop (20pt → 14pt
+floor) against `HEADER_MAX_WIDTH`, which budgets for the flanking accents
+clearing the frame corners; names too wide even at 14pt render without
+the accents.
 
 **After-hours inversion.** When `display.after_hours_invert = true` and
 `[location]` lat/long are set, `__main__` calls `kidage.solar.sun_times()`
 on the live wall-clock date and passes
-`after_hours = now + 30min >= sunset` into `render()`. The 30-min
-look-ahead — rather than a naïve `now >= sunset` — is what stops the
-panel from sitting on a stale day-mode image for up to ~50 min when
-sunset falls mid-hour (the timer only fires hourly, so the refresh that
-lands just before sunset has to decide for the whole upcoming hour). The
-midpoint flips the panel dark when >half of the upcoming hour will be
-post-sunset. `render()` swaps the black plane (0 ↔ 1) so the panel reads
-white-on-black, **then punches black back out wherever the red plane has
-ink** — the Waveshare driver ORs the two planes onto the panel, so a
-uniformly-black plane would otherwise mask out every red bead/accent. The
-wake-window skip at the top of `__main__` is unchanged: after-hours
-operates inside `[wake_hour, sleep_hour]`, so deep-night hours still skip
-the refresh entirely. `--now` previews stay literal (no surprise
-inversion); pass `--after-hours` to force the inverted look for layout
-work.
+`after_hours = (now + 30min < sunrise) or (now + 30min >= sunset)` into
+`render()`. The 30-min look-ahead — rather than a naïve `now >= sunset` —
+is what stops the panel from sitting on a stale day-mode image for up to
+~50 min when sunset falls mid-hour (the timer only fires hourly, so the
+refresh that lands just before sunset has to decide for the whole upcoming
+hour). The midpoint flips the panel dark when >half of the upcoming hour
+will be post-sunset; the symmetric sunrise check keeps dark winter
+mornings (wake_hour before sunrise) inverted too. When `sun_times()`
+returns `None` (sun never crosses the horizon), `solar.polar_night()`
+decides: polar night inverts all day, polar day never does. `render()`
+swaps the black plane (0 ↔ 1) so the panel reads white-on-black, **then
+punches black back out wherever the red plane has ink** — the Waveshare
+driver ORs the two planes onto the panel, so a uniformly-black plane
+would otherwise mask out every red bead/accent. The wake-window skip at
+the top of `__main__` is unchanged: after-hours operates inside
+`[wake_hour, sleep_hour]`, so deep-night hours still skip the refresh
+entirely (except the quiet catch-up below). `--now` previews stay literal
+(no surprise inversion); pass `--after-hours` to force the inverted look
+for layout work.
 
 **Quiet mode at sleep_hour.** The systemd timer's last refresh of the day
 lands at `cfg.sleep_hour`; after that the panel freezes overnight on
@@ -133,13 +143,23 @@ line and `full` corners. Frame, header, and the static "since …" footer
 stay. Quiet wins over both `special` (a 21:00 birthday/milestone is
 suppressed) and `age_format` (a `days` / `hours` config falls back to
 years/months for the freeze). `--now` previews stay literal; pass
-`--quiet` to force the layout for design work.
+`--quiet` to force the layout for design work. Every live quiet refresh
+records its date in `/var/lib/kidage/last-quiet`; if a run lands *outside*
+the wake window (the timer fires all day, plus `Persistent=true` catch-up
+after a boot) and that file shows the most recent sleep_hour was missed —
+e.g. the Pi was off at 21:00 and booted at 22:30 — `__main__` paints one
+quiet catch-up refresh instead of skipping, so the panel doesn't freeze
+overnight on volatile metrics. After midnight the cutoff is yesterday's
+date.
 
 **Special-day mode is a third axis on top of `age_format`.**
 `kidage.special.detect()` returns a hero override string when `now` falls
-on the kid's birthday (matching `born_at.month`/`day`, with Feb 29 → Feb
-28 fallback in non-leap years) or when `age.total_days` is in the
-configured milestones. `__main__` passes the result to `render()` as the
+on the kid's birthday (matching the month/day of `born_at` *projected into
+`now.tzinfo`* — same wall-clock semantics as the age math, so a near-
+midnight birth celebrates on the day the years/months roll over; Feb 29 →
+Feb 28 fallback in non-leap years) or when `age.total_days` is in the
+configured milestones. `__main__` likewise hands `render()` the projected
+`born_at` so the "since …" footer names the same wall-clock day. `__main__` passes the result to `render()` as the
 `special` keyword. When set, `render()` ignores `age_format` for the hero
 row, uses `HERO_Y_TWO_LINE`, and forces the sub line to `_hero_line(age)`
 ("Y years M months") regardless of format — so a milestone hit in
@@ -169,12 +189,13 @@ to 4:54pm ET).
 TOML loader rejects naïve datetimes — `kid.born_at` must include an offset
 (e.g. `2022-09-12T03:47:00-07:00`); the offset pins the absolute moment of
 birth, but wall-clock semantics for the anniversary follow the Pi's system
-zoneinfo (see "Age math is wall-clock" above). The `[display]` block is
-strict: unknown keys raise at load time so a typo like `layout = "full"`
-fails fast instead of silently rendering the default — keep the
-allow-list (`flip` / `accent` / `format` / `after_hours_invert`) in sync
-with the dataclass when adding a knob. The `[location]` block is also
-strict (`latitude` / `longitude` only) and is required when
+zoneinfo (see "Age math is wall-clock" above). A future `born_at` is
+rejected at load time. *Every* table is strict — unknown top-level
+sections and unknown keys under `[kid]`, `[schedule]`, `[display]`,
+`[location]`, and `[special_days]` raise at load time, so a typo like
+`wake_hours = 8` or `layout = "full"` fails fast instead of silently
+rendering the default. Keep the `_reject_unknown` allow-lists in sync
+with the dataclass when adding a knob. `[location]` is required when
 `after_hours_invert = true`.
 
 ## Deployed-revision stamping

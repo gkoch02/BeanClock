@@ -147,3 +147,40 @@ def test_should_clear_when_state_file_is_malformed(display, tmp_path):
     not crash _should_clear_today; it should just clear."""
     (tmp_path / "last-clear").write_text("yesterday\n")
     assert display._should_clear_today(date(2026, 4, 27)) is True
+
+
+def test_show_sleeps_even_when_display_raises(display, fake_epd_module):
+    """sleep() is the only call that drops the panel's drive voltage and
+    releases SPI/GPIO; a failed display() must not skip it."""
+    fake_epd_module.display = lambda *_: (_ for _ in ()).throw(RuntimeError("spi"))
+    black, red = _planes()
+    with pytest.raises(RuntimeError, match="spi"):
+        display.show(black, red, today=date(2026, 4, 27))
+    assert fake_epd_module.calls[-1] == "sleep"
+
+
+def test_show_sleeps_even_when_clear_raises(display, fake_epd_module):
+    fake_epd_module.Clear = lambda: (_ for _ in ()).throw(RuntimeError("spi"))
+    black, red = _planes()
+    with pytest.raises(RuntimeError, match="spi"):
+        display.show(black, red, today=date(2026, 4, 27))
+    assert fake_epd_module.calls[-1] == "sleep"
+
+
+def test_quiet_refreshed_since_missing_file(display):
+    assert display.quiet_refreshed_since(date(2026, 4, 27)) is False
+
+
+def test_quiet_record_and_read_roundtrip(display, tmp_path):
+    display.record_quiet(date(2026, 4, 27))
+    assert (tmp_path / "last-quiet").read_text() == "2026-04-27"
+    assert display.quiet_refreshed_since(date(2026, 4, 27)) is True
+    assert display.quiet_refreshed_since(date(2026, 4, 26)) is True
+    assert display.quiet_refreshed_since(date(2026, 4, 28)) is False
+
+
+def test_quiet_refreshed_since_malformed_file(display, tmp_path):
+    """A truncated/garbled state file must read as 'not refreshed' so the
+    catch-up paints once rather than crashing or skipping forever."""
+    (tmp_path / "last-quiet").write_text("last tuesday\n")
+    assert display.quiet_refreshed_since(date(2026, 4, 27)) is False

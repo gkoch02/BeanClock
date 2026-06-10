@@ -10,6 +10,8 @@ _ORDINAL_SUFFIXES = {1: "st", 2: "nd", 3: "rd"}
 
 
 def _is_birthday(born_at: datetime, now: datetime) -> bool:
+    # born_at arrives projected into now's zone (see detect) so the calendar
+    # comparison matches age.compute's wall-clock semantics.
     if born_at.month == now.month and born_at.day == now.day:
         return True
     # Feb 29 birth: celebrate on Feb 28 in non-leap years. In leap years the
@@ -34,11 +36,18 @@ def detect(
     birthday: bool,
     milestones: Sequence[int],
 ) -> str | None:
-    if birthday and _is_birthday(born_at, now):
+    # Project born_at into now's zone before any calendar comparison — the
+    # same wall-clock semantics age.compute uses. Without this, a birth near
+    # midnight plus a DST shift or a family move across zones puts the
+    # banner on a different day than the years/months rollover (e.g. born
+    # 23:47 PT, Pi in ET: the banner would fire Sep 12 while the age math
+    # flips Sep 13 — painting "Happy 4th Birthday!" over "3 years 11 months").
+    born_local = born_at.astimezone(now.tzinfo)
+    if birthday and _is_birthday(born_local, now):
         # Use the calendar-year delta, not age.years: age.years only ticks over
         # at the exact birth minute, so a kid born at 18:00 would otherwise see
         # "Happy 3rd Birthday!" on the morning of their 4th birthday.
-        years_turning = now.year - born_at.year
+        years_turning = now.year - born_local.year
         if years_turning > 0:
             return f"Happy {_ordinal(years_turning)} Birthday!"
         return "Happy Birthday!"

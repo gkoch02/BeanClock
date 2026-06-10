@@ -27,8 +27,11 @@ apt-get install -y --no-install-recommends \
 
 echo "==> Creating service user"
 if ! id kidage >/dev/null 2>&1; then
+    # spi/gpio exist on Raspberry Pi OS but not everywhere; only request the
+    # ones present so useradd doesn't abort the install on other hosts.
+    hw_groups="$(getent group spi gpio 2>/dev/null | cut -d: -f1 | paste -sd, - || true)"
     useradd --system --home "$INSTALL_DIR" --shell /usr/sbin/nologin \
-            --groups spi,gpio kidage
+            ${hw_groups:+--groups "$hw_groups"} kidage
 fi
 
 echo "==> Syncing source to $INSTALL_DIR"
