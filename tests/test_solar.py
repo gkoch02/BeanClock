@@ -121,3 +121,23 @@ def test_antimeridian_longitudes_dont_crash():
     # ~1 day in raw seconds, since they refer to the same physical longitude
     # but the formula resolves day-boundaries differently at the wrap).
     assert abs((east[1] - west[1]).total_seconds()) < 24 * 3600
+
+
+def test_polar_night_true_at_high_latitude_midwinter():
+    from kidage.solar import polar_night
+
+    assert polar_night(date(2026, 12, 21), 80.0, 0.0) is True
+
+
+def test_polar_night_false_during_polar_day():
+    """Midsummer at 80°N: the sun never sets — that's polar *day*, and the
+    after-hours feature must not invert."""
+    from kidage.solar import polar_night
+
+    assert polar_night(date(2026, 6, 21), 80.0, 0.0) is False
+
+
+def test_polar_night_false_at_mid_latitudes():
+    from kidage.solar import polar_night
+
+    assert polar_night(date(2026, 12, 21), 40.0150, -105.2705) is False

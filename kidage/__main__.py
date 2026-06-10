@@ -124,32 +124,61 @@ def main(argv: list[str] | None = None) -> int:
         format="%(asctime)s %(levelname)s %(message)s",
     )
 
+    if args.preview is None and (args.after_hours or args.quiet):
+        log.warning(
+            "--after-hours/--quiet are preview flags; forcing them on the live panel"
+        )
+
     cfg = load(args.config or _default_config_path())
     # The live path needs a DST-aware ZoneInfo (not the fixed-offset tzinfo
     # from `datetime.now().astimezone()`); otherwise age.compute can't project
     # a winter-saved born_at into a summer wall clock and the anniversary
     # slips an hour. --now keeps the caller's offset so layout previews show
     # the exact wall clock requested.
-    now = (
-        datetime.fromisoformat(args.now)
-        if args.now
-        else datetime.now(tz=_system_zone())
-    )
+    if args.now:
+        try:
+            now = datetime.fromisoformat(args.now)
+        except ValueError:
+            parser.error(f"--now: not an ISO 8601 datetime: {args.now!r}")
+        if now.tzinfo is None:
+            parser.error(
+                "--now must include a UTC offset, e.g. 2026-04-27T07:47:00-07:00"
+            )
+    else:
+        now = datetime.now(tz=_system_zone())
 
     # The systemd timer fires hourly all day, so the wake/sleep window in
     # config is what actually decides which hours touch the panel. --preview
     # bypasses the window so layout work doesn't depend on wall-clock time.
+    quiet_catchup = False
     if args.preview is None and not (cfg.wake_hour <= now.hour <= cfg.sleep_hour):
+        if args.now is None:
+            # If the Pi was off at sleep_hour, the panel is frozen overnight
+            # on volatile metrics (the freeze the quiet layout exists to
+            # prevent). Persistent=true delivers a catch-up run after boot;
+            # use it to paint the quiet layout once, then go back to skipping.
+            from kidage.display import quiet_refreshed_since
+            cutoff = (
+                now.date()
+                if now.hour > cfg.sleep_hour
+                else now.date() - timedelta(days=1)
+            )
+            quiet_catchup = not quiet_refreshed_since(cutoff)
+        if not quiet_catchup:
+            log.info(
+                "now=%s hour=%d outside wake window [%d, %d]; skipping refresh",
+                now.isoformat(), now.hour, cfg.wake_hour, cfg.sleep_hour,
+            )
+            return 0
         log.info(
-            "now=%s hour=%d outside wake window [%d, %d]; skipping refresh",
-            now.isoformat(), now.hour, cfg.wake_hour, cfg.sleep_hour,
+            "missed the sleep_hour=%d refresh; painting quiet catch-up",
+            cfg.sleep_hour,
         )
-        return 0
 
     # Last refresh before quiet hours: the panel freezes on this image until
     # the next morning, so suppress volatile metrics. Live path only —
     # previews stay literal unless --quiet is passed.
-    quiet = args.quiet
+    quiet = args.quiet or quiet_catchup
     if not quiet and args.now is None:
         quiet = now.hour == cfg.sleep_hour
         if quiet:
@@ -162,22 +191,31 @@ def main(argv: list[str] | None = None) -> int:
         # inversion) — use --after-hours to force the inverted look.
         # config.load() guarantees lat/lon are set when after_hours_invert
         # is true, so the asserts here are static-check belt-and-braces.
-        from kidage.solar import sun_times
+        from kidage.solar import polar_night, sun_times
         assert cfg.latitude is not None
         assert cfg.longitude is not None
         times = sun_times(now.date(), cfg.latitude, cfg.longitude)
         if times is not None:
+            sunrise_local = times[0].astimezone(now.tzinfo)
             sunset_local = times[1].astimezone(now.tzinfo)
             # Look 30 min ahead, not at `now` itself: the panel only refreshes
             # hourly, so a naïve `now >= sunset` leaves a stale day-mode image
             # on the panel for up to ~50 min when sunset falls mid-hour. The
             # 30-min midpoint flips the panel dark when >half of the upcoming
-            # hour will be post-sunset.
-            after_hours = now + timedelta(minutes=30) >= sunset_local
+            # hour will be post-sunset. The same midpoint applies on the
+            # sunrise side so dark winter mornings (wake_hour before sunrise)
+            # render the inverted look too.
+            ahead = now + timedelta(minutes=30)
+            after_hours = ahead < sunrise_local or ahead >= sunset_local
             log.info(
-                "sunset=%s after_hours=%s",
-                sunset_local.isoformat(), after_hours,
+                "sunrise=%s sunset=%s after_hours=%s",
+                sunrise_local.isoformat(), sunset_local.isoformat(), after_hours,
             )
+        else:
+            # Sun never crosses the horizon today. Polar night stays dark all
+            # day; polar day stays bright.
+            after_hours = polar_night(now.date(), cfg.latitude, cfg.longitude)
+            log.info("no sunrise/sunset today; after_hours=%s", after_hours)
 
     age = compute(cfg.born_at, now)
     log.info("kid=%s age=%s", cfg.name, age)
@@ -192,10 +230,13 @@ def main(argv: list[str] | None = None) -> int:
     if special is not None:
         log.info("special-day display: %r", special)
 
+    # The footer prints born_at's calendar date; project it into now's zone
+    # so it names the same wall-clock day the age math and birthday banner
+    # flip on (matters for births near midnight after a DST or zone change).
     black, red = render(
         cfg.name,
         age,
-        cfg.born_at,
+        cfg.born_at.astimezone(now.tzinfo),
         accent=cfg.accent,
         flip=cfg.flip,
         age_format=cfg.age_format,
@@ -209,8 +250,12 @@ def main(argv: list[str] | None = None) -> int:
         log.info("wrote preview to %s", args.preview)
         return 0
 
-    from kidage.display import show
+    from kidage.display import record_quiet, show
     show(black, red, today=now.date())
+    if quiet and args.now is None:
+        # Lets the outside-window catch-up above know tonight's freeze image
+        # is already the quiet layout.
+        record_quiet(now.date())
     return 0
 
 

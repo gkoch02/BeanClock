@@ -325,22 +325,89 @@ born_at = "2024-01-01T00:00:00+00:00"
 
 
 def test_missing_kid_section_raises(tmp_path):
-    """A config without [kid] is malformed. Today this raises KeyError; pin
-    that behavior so a future refactor to a friendlier error is intentional."""
+    """A config without [kid] is malformed; the error must name the section
+    rather than surfacing as a bare KeyError traceback."""
     p = _write(tmp_path, '[schedule]\nwake_hour = 7\n')
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError, match=r"\[kid\] section"):
         load(p)
 
 
 def test_missing_kid_name_raises(tmp_path):
     p = _write(tmp_path, '[kid]\nborn_at = 2024-01-01T00:00:00+00:00\n')
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError, match="kid.name is required"):
         load(p)
 
 
 def test_missing_kid_born_at_raises(tmp_path):
     p = _write(tmp_path, '[kid]\nname = "X"\n')
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError, match="kid.born_at is required"):
+        load(p)
+
+
+def test_rejects_empty_kid_name(tmp_path):
+    p = _write(tmp_path, '[kid]\nname = "  "\nborn_at = 2024-01-01T00:00:00+00:00\n')
+    with pytest.raises(ValueError, match="non-empty string"):
+        load(p)
+
+
+def test_rejects_future_born_at(tmp_path):
+    """A born_at in the future would otherwise traceback hourly from
+    age.compute — fail at load time with a clear message instead."""
+    p = _write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2999-01-01T00:00:00+00:00
+""")
+    with pytest.raises(ValueError, match="future"):
+        load(p)
+
+
+def test_rejects_unknown_top_level_section(tmp_path):
+    p = _write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00+00:00
+[schedules]
+wake_hour = 8
+""")
+    with pytest.raises(ValueError, match="schedules"):
+        load(p)
+
+
+def test_rejects_unknown_kid_key(tmp_path):
+    p = _write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00+00:00
+nickname = "Xy"
+""")
+    with pytest.raises(ValueError, match="nickname"):
+        load(p)
+
+
+def test_rejects_unknown_schedule_key(tmp_path):
+    """`wake_hours = 8` (note the s) must fail loudly, not leave the wake
+    window silently at the default."""
+    p = _write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00+00:00
+[schedule]
+wake_hours = 8
+""")
+    with pytest.raises(ValueError, match="wake_hours"):
+        load(p)
+
+
+def test_rejects_unknown_special_days_key(tmp_path):
+    p = _write(tmp_path, """
+[kid]
+name = "X"
+born_at = 2024-01-01T00:00:00+00:00
+[special_days]
+birthdays = false
+""")
+    with pytest.raises(ValueError, match="birthdays"):
         load(p)
 
 

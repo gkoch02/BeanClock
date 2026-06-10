@@ -619,17 +619,54 @@ def test_hero_shrink_loop_stops_at_16pt_floor():
     assert extent is not None
 
 
-def test_long_name_in_header_is_pinned_behavior():
-    """The header `{name} is` has no shrink loop — a long name will paint
-    wherever the centered string lands. Pin current behavior: a 20-char
-    name still renders ink in the header band without crashing. If a
-    future change adds shrink/clip logic, this test should be updated
-    intentionally rather than silently breaking."""
-    long_name = "Maximilian Aurelius"
+def test_long_name_header_shrinks_into_accent_budget():
+    """The header `{name} is` shrinks (2pt steps, 14pt floor) like the hero
+    so long names keep the flanking accents clear of the frame's corner
+    glyphs. For a name that fits the budget after shrinking, every red
+    pixel in the header band — text plus both accents — must stay inside
+    the frame-safe x range [14, WIDTH-15]."""
+    long_name = "Bartholomew-James"
+    bd = ImageDraw.Draw(Image.new("1", (WIDTH, HEIGHT), 1))
+    from kidage.render import HEADER_MAX_WIDTH, _text_width
+
+    assert _text_width(bd, f"{long_name} is", _font(20, "Medium")) > HEADER_MAX_WIDTH, (
+        "fixture name no longer exercises the shrink loop — pick a longer one"
+    )
     black, red = render(long_name, AGE, BORN)
-    # Header sits at y=FRAME_PAD, ~20pt tall.
-    header_band = range(FRAME_PAD, FRAME_PAD + 20)
-    assert _ink_x_extent(red, header_band) is not None
+    # Skip the frame's own ink: bead rails live at x <= 14 / x >= WIDTH-15
+    # only in the corner-glyph rows, which sit above FRAME_PAD+5; measure
+    # below them to isolate the text+accent row.
+    extent = _ink_x_extent(red, range(FRAME_PAD + 6, FRAME_PAD + 20), range(8, WIDTH - 8))
+    assert extent is not None, "expected header ink"
+    left, right = extent
+    assert left >= 14, f"header row collides with the left frame: {left}"
+    assert right <= WIDTH - 15, f"header row collides with the right frame: {right}"
+
+
+def test_extreme_name_skips_header_accents():
+    """A name too wide even at the 14pt floor renders without the flanking
+    accents — the text alone is centered, and no red ink appears between
+    the frame and the text's left edge."""
+    name = "Maximiliana Wilhelmina Jones"
+    bd = ImageDraw.Draw(Image.new("1", (WIDTH, HEIGHT), 1))
+    from kidage.render import HEADER_MAX_WIDTH, _text_width
+
+    hw = _text_width(bd, f"{name} is", _font(14, "Medium"))
+    assert hw > HEADER_MAX_WIDTH, (
+        "fixture name fits the budget at 14pt — pick a longer one"
+    )
+    black, red = render(name, AGE, BORN)
+    hx = (WIDTH - hw) // 2
+    rp = red.load()
+    # If accents were drawn anyway, their centers would land at hx-14 with
+    # ink reaching back toward the frame; the band left of the text must be
+    # blank. Start at x=16 to skip the corner glyph (center x=9, size 4).
+    for y in range(FRAME_PAD, FRAME_PAD + 20):
+        for x in range(16, hx):
+            assert rp[x, y] == 1, (
+                f"unexpected red ink at ({x},{y}) — header accents should be "
+                "skipped for names beyond the budget"
+            )
 
 
 def test_flip_after_hours_red_plane_matches_flipped_normal():

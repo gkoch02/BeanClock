@@ -34,18 +34,19 @@ the age is spelled out. A spread:
   phrasing slides to the sub line.
 - Single TOML config file for the kid's name, birth datetime+timezone, wake
   window, and accent glyph.
-- **After-hours inversion** — after sunset (computed from your
-  `latitude`/`longitude` using a built-in NOAA algorithm, no network or API
-  key needed) the black plane inverts to white-on-black so the display reads
-  more comfortably in a dark room; red accents stay red. Inversion only fires
-  within the configured wake window — deep-night hours still skip the refresh
-  entirely.
+- **After-hours inversion** — while it's dark out (after sunset or before
+  sunrise, computed from your `latitude`/`longitude` using a built-in NOAA
+  algorithm, no network or API key needed) the black plane inverts to
+  white-on-black so the display reads more comfortably in a dark room; red
+  accents stay red. Inversion only fires within the configured wake window —
+  deep-night hours still skip the refresh entirely.
 - Once-a-day full clear to suppress ghosting; the other ~14 daily refreshes
   go straight to `display()` for less flicker.
 - **Quiet last refresh** — the refresh at `sleep_hour` (the last one before
   the overnight freeze) drops the volatile days/hours sub line and the
   `full`-mode totals, so the panel doesn't sit overnight showing yesterday's
-  hour count.
+  hour count. If the Pi happened to be off at `sleep_hour`, the first run
+  after boot paints the quiet layout once as a catch-up.
 - Pure-Python, vendored Waveshare driver — no apt-time setup beyond Pillow's
   runtime libs.
 
@@ -103,11 +104,12 @@ sleep_hour = 21   # inclusive, local time of last daily update
 flip               = false      # rotate 180° if the ribbon comes out the other side
 accent             = "heart"    # heart | star | balloon | moon | sun | flower
 format             = "extended" # extended (years/months + days/hours) | days | hours | full
-after_hours_invert = true       # invert to white-on-black after sunset (requires [location])
+after_hours_invert = true       # invert to white-on-black while dark out (requires [location])
 
 [location]
-# Decimal degrees — used to compute today's sunset for after_hours_invert.
-# Omit this whole block (and set after_hours_invert = false) to disable.
+# Decimal degrees — used to compute today's sunrise/sunset for
+# after_hours_invert. Omit this whole block (and set after_hours_invert =
+# false) to disable.
 latitude  = 40.0150
 longitude = -105.2705
 
@@ -116,11 +118,16 @@ birthday   = true                          # hero swaps to "Happy Nth Birthday!"
 milestones = [100, 500, 1000, 2000, 5000]  # hero swaps to "N days!"; [] disables
 ```
 
-When `after_hours_invert = true` the panel switches to white-on-black after
-today's local sunset, computed on-device from `latitude`/`longitude` (NOAA
-algorithm, no network needed). Red beads and accents remain red. The inversion
-only fires within the `[wake_hour, sleep_hour]` window; deep-night hours still
-skip the refresh entirely.
+When `after_hours_invert = true` the panel switches to white-on-black while
+it's dark out — after today's local sunset or before sunrise — computed
+on-device from `latitude`/`longitude` (NOAA algorithm, no network needed).
+Red beads and accents remain red. The inversion only fires within the
+`[wake_hour, sleep_hour]` window; deep-night hours still skip the refresh
+entirely.
+
+Every table in the config is strict: a typo'd key (`wake_hours = 8`,
+`layout = "full"`) fails at load time instead of silently rendering the
+default.
 
 On a matching day the hero row is replaced and the standard age phrasing
 slides to the sub line, regardless of `display.format`. Feb 29 births

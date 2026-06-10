@@ -27,12 +27,39 @@ VALID_FORMATS = {"extended", "days", "hours", "full"}
 DEFAULT_MILESTONES: tuple[int, ...] = (100, 500, 1000, 2000, 5000)
 
 
+def _reject_unknown(table: dict[str, object], where: str, allowed: set[str]) -> None:
+    # Every table is strict so a typo'd key fails at load time instead of
+    # silently rendering the default (e.g. `wake_hours = 8` leaving the wake
+    # window at 7).
+    unknown = set(table) - allowed
+    if unknown:
+        raise ValueError(
+            f"unknown key(s) {where}: {sorted(unknown)}; "
+            f"valid keys are {sorted(allowed)}"
+        )
+
+
 def load(path: Path) -> Config:
     with path.open("rb") as fh:
         raw = tomllib.load(fh)
 
-    kid = raw["kid"]
+    _reject_unknown(
+        raw,
+        "at the top level",
+        {"kid", "schedule", "display", "location", "special_days"},
+    )
+
+    kid = raw.get("kid")
+    if not isinstance(kid, dict):
+        raise ValueError("config must have a [kid] section with 'name' and 'born_at'")
+    _reject_unknown(kid, "under [kid]", {"name", "born_at"})
+    if "name" not in kid:
+        raise ValueError("kid.name is required")
+    if "born_at" not in kid:
+        raise ValueError("kid.born_at is required")
     name = kid["name"]
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("kid.name must be a non-empty string")
     born_at = kid["born_at"]
     if not isinstance(born_at, datetime):
         raise ValueError(
@@ -41,20 +68,20 @@ def load(path: Path) -> Config:
         )
     if born_at.tzinfo is None:
         raise ValueError("kid.born_at must include a timezone offset")
+    if born_at > datetime.now(tz=born_at.tzinfo):
+        raise ValueError(
+            "kid.born_at is in the future — the kiddo isn't here yet"
+        )
 
     schedule = raw.get("schedule", {})
+    _reject_unknown(schedule, "under [schedule]", {"wake_hour", "sleep_hour"})
     wake_hour = int(schedule.get("wake_hour", 7))
     sleep_hour = int(schedule.get("sleep_hour", 21))
     if not (0 <= wake_hour < sleep_hour <= 23):
         raise ValueError("schedule must satisfy 0 <= wake_hour < sleep_hour <= 23")
 
     display = raw.get("display", {})
-    unknown = set(display) - {"flip", "accent", "format", "after_hours_invert"}
-    if unknown:
-        raise ValueError(
-            f"unknown key(s) under [display]: {sorted(unknown)}; "
-            "valid keys are 'flip', 'accent', 'format', 'after_hours_invert'"
-        )
+    _reject_unknown(display, "under [display]", {"flip", "accent", "format", "after_hours_invert"})
     flip = bool(display.get("flip", False))
     accent = str(display.get("accent", "heart")).lower()
     if accent not in VALID_ACCENTS:
@@ -65,12 +92,7 @@ def load(path: Path) -> Config:
     after_hours_invert = bool(display.get("after_hours_invert", False))
 
     location = raw.get("location", {})
-    unknown_loc = set(location) - {"latitude", "longitude"}
-    if unknown_loc:
-        raise ValueError(
-            f"unknown key(s) under [location]: {sorted(unknown_loc)}; "
-            "valid keys are 'latitude', 'longitude'"
-        )
+    _reject_unknown(location, "under [location]", {"latitude", "longitude"})
     latitude = location.get("latitude")
     longitude = location.get("longitude")
     if (latitude is None) != (longitude is None):
@@ -90,6 +112,7 @@ def load(path: Path) -> Config:
         )
 
     special = raw.get("special_days", {})
+    _reject_unknown(special, "under [special_days]", {"birthday", "milestones"})
     birthday = bool(special.get("birthday", True))
     raw_milestones = special.get("milestones", list(DEFAULT_MILESTONES))
     if not isinstance(raw_milestones, list) or not all(

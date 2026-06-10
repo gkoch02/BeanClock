@@ -157,3 +157,30 @@ def test_ordinal_direct(n, expected):
     realistic detect() inputs at age 11–13; pin the helper directly so the
     111/112/113 mod-100 logic is verified without waiting a century."""
     assert _ordinal(n) == expected
+
+
+def test_birthday_follows_wall_clock_projection():
+    """A birth near midnight must celebrate on the projected local day, not
+    the raw born_at calendar day — matching age.compute's wall-clock
+    semantics. Born 23:47 Pacific; viewed from a -04:00 (Eastern-summer)
+    zone that projects to 02:47 on Sep *13*: the banner must fire Sep 13
+    (when years/months roll over) and stay silent on Sep 12."""
+    born = datetime(2022, 9, 12, 23, 47, tzinfo=PT)
+    ET = timezone(timedelta(hours=-4))
+    sep_12 = datetime(2026, 9, 12, 10, 0, tzinfo=ET)
+    sep_13 = datetime(2026, 9, 13, 10, 0, tzinfo=ET)
+    assert detect(born, sep_12, NORMAL, birthday=True, milestones=()) is None
+    assert detect(born, sep_13, NORMAL, birthday=True, milestones=()) == (
+        "Happy 4th Birthday!"
+    )
+
+
+def test_birthday_projection_handles_year_boundary():
+    """A Dec 31 23:30 -08:00 birth projects into Jan 1 in an eastern zone —
+    the ordinal must come from the projected year too."""
+    born = datetime(2022, 12, 31, 23, 30, tzinfo=timezone(timedelta(hours=-8)))
+    ET = timezone(timedelta(hours=-5))
+    jan_1 = datetime(2026, 1, 1, 10, 0, tzinfo=ET)
+    assert detect(born, jan_1, NORMAL, birthday=True, milestones=()) == (
+        "Happy 3rd Birthday!"
+    )
