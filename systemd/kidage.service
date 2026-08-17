@@ -7,6 +7,12 @@ Environment=KIDAGE_CONFIG=/etc/kidage/config.toml
 Environment=KIDAGE_STATE_DIR=/var/lib/kidage
 WorkingDirectory=/opt/kidage
 ExecStart=/opt/kidage/.venv/bin/python -m kidage
+# Defense in depth on top of kidage/display.py's own SIGALRM-based bounds
+# around each EPD hardware call (init/refresh/sleep sum to 100s at most). A
+# stuck BUSY pin should fail loudly well before this and never reach here,
+# but this stops the oneshot from hanging the hourly timer indefinitely if
+# it ever does (e.g. a hang outside the guarded hardware calls).
+TimeoutStartSec=150
 User=kidage
 SupplementaryGroups=spi gpio
 StateDirectory=kidage

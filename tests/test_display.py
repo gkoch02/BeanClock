@@ -1,5 +1,6 @@
 import importlib
 import sys
+import time
 from datetime import date
 from types import SimpleNamespace
 
@@ -47,6 +48,7 @@ class FakeEPD:
 
     def init(self):
         self.calls.append("init")
+        return 0
 
     def Clear(self):
         self.calls.append("Clear")
@@ -62,14 +64,19 @@ class FakeEPD:
         self.calls.append("sleep")
 
 
-@pytest.fixture
-def fake_epd_module(monkeypatch):
-    fake = FakeEPD()
+def _install_fake_epd(monkeypatch, fake):
+    """Wire `fake` up as the vendor.waveshare_epd.epd2in13b_V4.EPD() the
+    lazy import inside display.show() resolves to."""
     module = SimpleNamespace(EPD=lambda: fake)
     pkg = SimpleNamespace(epd2in13b_V4=module)
     monkeypatch.setitem(sys.modules, "vendor.waveshare_epd", pkg)
     monkeypatch.setitem(sys.modules, "vendor.waveshare_epd.epd2in13b_V4", module)
     return fake
+
+
+@pytest.fixture
+def fake_epd_module(monkeypatch):
+    return _install_fake_epd(monkeypatch, FakeEPD())
 
 
 def _planes():
@@ -184,3 +191,97 @@ def test_quiet_refreshed_since_malformed_file(display, tmp_path):
     catch-up paints once rather than crashing or skipping forever."""
     (tmp_path / "last-quiet").write_text("last tuesday\n")
     assert display.quiet_refreshed_since(date(2026, 4, 27)) is False
+
+
+class StuckBusyEPD(FakeEPD):
+    """Simulates a permanently-asserted BUSY pin: whichever hardware call is
+    named in `hang_call` spins forever, mirroring the vendored driver's
+    unbounded `busy()` loop (vendor/waveshare_epd/epd2in13b_V4.py)."""
+
+    def __init__(self, hang_call: str):
+        super().__init__()
+        self._hang_call = hang_call
+
+    def _record_and_maybe_hang(self, key: str, logged: str | None = None):
+        self.calls.append(logged if logged is not None else key)
+        if key == self._hang_call:
+            while True:  # pragma: no branch - broken out of by SIGALRM
+                time.sleep(0.01)
+
+    def init(self):
+        self._record_and_maybe_hang("init")
+        return 0
+
+    def Clear(self):
+        self._record_and_maybe_hang("Clear")
+
+    def display(self, black_buf, red_buf):
+        self._record_and_maybe_hang(
+            "display", logged=f"display({black_buf!r},{red_buf!r})"
+        )
+
+    def sleep(self):
+        self._record_and_maybe_hang("sleep")
+
+
+def test_show_raises_on_stuck_busy_during_init(display, monkeypatch):
+    """A panel wedged before/during epd.init() (e.g. SWRESET never clears
+    BUSY) must fail within INIT_TIMEOUT_SEC rather than hanging forever."""
+    monkeypatch.setattr(display, "INIT_TIMEOUT_SEC", 1)
+    fake = _install_fake_epd(monkeypatch, StuckBusyEPD(hang_call="init"))
+    black, red = _planes()
+    with pytest.raises(display.DisplayTimeoutError, match="init"):
+        display.show(black, red, today=date(2026, 4, 27))
+    # module_init() (inside epd.init()) opens SPI/GPIO before any BUSY wait,
+    # so even a stuck init still needs the finally-block sleep() to release
+    # them.
+    assert fake.calls[-1] == "sleep"
+
+
+def test_show_raises_on_stuck_busy_during_display(display, monkeypatch):
+    """A panel wedged mid-refresh (ondisplay()'s busy() wait) must fail
+    within REFRESH_TIMEOUT_SEC, and sleep() must still run afterward."""
+    monkeypatch.setattr(display, "REFRESH_TIMEOUT_SEC", 1)
+    fake = _install_fake_epd(monkeypatch, StuckBusyEPD(hang_call="display"))
+    black, red = _planes()
+    with pytest.raises(display.DisplayTimeoutError, match="refresh"):
+        display.show(black, red, today=date(2026, 4, 27))
+    assert fake.calls[-1] == "sleep"
+
+
+def test_show_sleep_call_is_itself_bounded(display, monkeypatch):
+    """sleep() doesn't poll BUSY, but a wedged SPI write there shouldn't be
+    able to hang the service either — it gets its own deadline."""
+    monkeypatch.setattr(display, "SLEEP_TIMEOUT_SEC", 1)
+    fake = _install_fake_epd(monkeypatch, StuckBusyEPD(hang_call="sleep"))
+    black, red = _planes()
+    with pytest.raises(display.DisplayTimeoutError, match="sleep"):
+        display.show(black, red, today=date(2026, 4, 27))
+    assert fake.calls[-1] == "sleep"
+
+
+def test_show_rejects_init_return_of_minus_one(display, fake_epd_module):
+    """epd.init() returning -1 is the vendored driver's documented failure
+    sentinel (module_init() != 0); it must not be silently treated as
+    success."""
+
+    def failing_init():
+        fake_epd_module.calls.append("init")
+        return -1
+
+    fake_epd_module.init = failing_init
+    black, red = _planes()
+    with pytest.raises(display.DisplayInitError):
+        display.show(black, red, today=date(2026, 4, 27))
+    # sleep() is the invariant that must never be skipped, even on an init
+    # failure — SPI/GPIO were already opened by module_init() by this point.
+    assert fake_epd_module.calls[-1] == "sleep"
+
+
+def test_show_succeeds_when_init_returns_zero(display, fake_epd_module):
+    """Sanity check: the normal init() return value (0) must not be
+    mistaken for the failure sentinel."""
+    black, red = _planes()
+    display.show(black, red, today=date(2026, 4, 27))
+    assert fake_epd_module.calls[-1] == "sleep"
+    assert "init" in fake_epd_module.calls
