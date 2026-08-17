@@ -150,7 +150,13 @@ after a boot) and that file shows the most recent sleep_hour was missed —
 e.g. the Pi was off at 21:00 and booted at 22:30 — `__main__` paints one
 quiet catch-up refresh instead of skipping, so the panel doesn't freeze
 overnight on volatile metrics. After midnight the cutoff is yesterday's
-date.
+date — and critically, the marker `record_quiet()` writes for that
+catch-up is *also* yesterday's date (`quiet_catchup_date`), not today's:
+the catch-up is covering yesterday's missed window, so the state must say
+so. Recording today's date there (the pre-#28-fix behavior) would let a
+*second* missed sleep_hour later that same calendar day go uncaught — the
+second late-night boot would see today's date already marked "covered" by
+the earlier small-hours catch-up and wrongly skip its own catch-up.
 
 **Special-day mode is a third axis on top of `age_format`.**
 `kidage.special.detect()` returns a hero override string when `now` falls

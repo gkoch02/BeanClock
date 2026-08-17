@@ -151,6 +151,13 @@ def main(argv: list[str] | None = None) -> int:
     # config is what actually decides which hours touch the panel. --preview
     # bypasses the window so layout work doesn't depend on wall-clock time.
     quiet_catchup = False
+    # The calendar date of the sleep-window this run's catch-up would cover
+    # (only meaningful when quiet_catchup ends up True). A small-hours boot
+    # (now.hour <= sleep_hour, i.e. after midnight) is catching up on
+    # *yesterday's* missed sleep_hour, not today's — the marker recorded
+    # below must reflect that, or a same-day miss recorded later that same
+    # calendar day would look like it already happened (issue #28).
+    quiet_catchup_date = None
     if args.preview is None and not (cfg.wake_hour <= now.hour <= cfg.sleep_hour):
         if args.now is None:
             # If the Pi was off at sleep_hour, the panel is frozen overnight
@@ -158,12 +165,12 @@ def main(argv: list[str] | None = None) -> int:
             # prevent). Persistent=true delivers a catch-up run after boot;
             # use it to paint the quiet layout once, then go back to skipping.
             from kidage.display import quiet_refreshed_since
-            cutoff = (
+            quiet_catchup_date = (
                 now.date()
                 if now.hour > cfg.sleep_hour
                 else now.date() - timedelta(days=1)
             )
-            quiet_catchup = not quiet_refreshed_since(cutoff)
+            quiet_catchup = not quiet_refreshed_since(quiet_catchup_date)
         if not quiet_catchup:
             log.info(
                 "now=%s hour=%d outside wake window [%d, %d]; skipping refresh",
@@ -253,9 +260,14 @@ def main(argv: list[str] | None = None) -> int:
     from kidage.display import record_quiet, show
     show(black, red, today=now.date())
     if quiet and args.now is None:
-        # Lets the outside-window catch-up above know tonight's freeze image
-        # is already the quiet layout.
-        record_quiet(now.date())
+        # Record the date of the sleep-window this refresh actually covers,
+        # not necessarily "today": a small-hours catch-up (quiet_catchup_date
+        # set above) is covering *yesterday's* missed sleep_hour, so the
+        # marker must say yesterday. Otherwise a later miss of *today's* own
+        # sleep_hour would find today's date already marked "covered" (by
+        # yesterday's catch-up) and wrongly skip its own catch-up — the
+        # two-boot-per-night scenario in issue #28.
+        record_quiet(quiet_catchup_date if quiet_catchup else now.date())
     return 0
 
 
