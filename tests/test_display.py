@@ -278,6 +278,31 @@ def test_show_rejects_init_return_of_minus_one(display, fake_epd_module):
     assert fake_epd_module.calls[-1] == "sleep"
 
 
+def test_show_preserves_init_error_when_sleep_also_fails(
+    display, fake_epd_module, caplog
+):
+    """If epd.init() returns -1 (module_init() failed) *and* the cleanup
+    sleep() call also raises (e.g. an unopened SPI bus), the caller must
+    still see the original DisplayInitError, not the secondary sleep()
+    failure masking it."""
+
+    def failing_init():
+        fake_epd_module.calls.append("init")
+        return -1
+
+    def failing_sleep():
+        fake_epd_module.calls.append("sleep")
+        raise OSError("SPI bus not open")
+
+    fake_epd_module.init = failing_init
+    fake_epd_module.sleep = failing_sleep
+    black, red = _planes()
+    with pytest.raises(display.DisplayInitError):
+        display.show(black, red, today=date(2026, 4, 27))
+    # sleep() must still have been attempted, even though it also failed.
+    assert fake_epd_module.calls[-1] == "sleep"
+
+
 def test_show_succeeds_when_init_returns_zero(display, fake_epd_module):
     """Sanity check: the normal init() return value (0) must not be
     mistaken for the failure sentinel."""

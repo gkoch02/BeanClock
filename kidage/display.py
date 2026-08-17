@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import signal
 from collections.abc import Iterator
@@ -9,6 +10,8 @@ from pathlib import Path
 from types import FrameType
 
 from PIL import Image
+
+log = logging.getLogger(__name__)
 
 STATE_DIR = Path(os.environ.get("KIDAGE_STATE_DIR", "/var/lib/kidage"))
 LAST_CLEAR_FILE = STATE_DIR / "last-clear"
@@ -101,6 +104,7 @@ def show(black: Image.Image, red: Image.Image, today: date | None = None) -> Non
 
     today = today or date.today()
     epd = epd2in13b_V4.EPD()
+    error: BaseException | None = None
     try:
         with _deadline(INIT_TIMEOUT_SEC, "epd.init()"):
             rc = epd.init()
@@ -115,6 +119,9 @@ def show(black: Image.Image, red: Image.Image, today: date | None = None) -> Non
                 epd.Clear()
                 _record_clear(today)
             epd.display(epd.getbuffer(black), epd.getbuffer(red))
+    except BaseException as exc:
+        error = exc
+        raise
     finally:
         # sleep() is the only call that drops the panel's drive voltage and
         # releases SPI/GPIO (epdconfig.module_exit). Tri-color panels must
@@ -125,5 +132,17 @@ def show(black: Image.Image, red: Image.Image, today: date | None = None) -> Non
         # releasing. It gets its own bounded deadline too: sleep() doesn't
         # poll BUSY, but a wedged SPI write shouldn't be able to hang the
         # service either.
-        with _deadline(SLEEP_TIMEOUT_SEC, "epd.sleep()"):
-            epd.sleep()
+        try:
+            with _deadline(SLEEP_TIMEOUT_SEC, "epd.sleep()"):
+                epd.sleep()
+        except Exception:
+            # If init()/display() already failed, sleep()'s own SPI traffic
+            # can fail too (e.g. an unopened bus) — don't let that secondary
+            # failure silently replace the original, more useful error.
+            if error is None:
+                raise
+            log.exception(
+                "epd.sleep() also failed while handling %r; suppressing "
+                "the sleep() failure to preserve the original error",
+                error,
+            )
