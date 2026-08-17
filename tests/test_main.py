@@ -1007,6 +1007,66 @@ def test_small_hours_catchup_uses_yesterday_cutoff(tmp_path, monkeypatch):
     calls = _called_show(monkeypatch)
     assert main(["--config", str(cfg)]) == 0
     assert len(calls) == 1
+    # The catch-up covers *yesterday's* (04-26) missed sleep_hour, not
+    # today's — the marker must reflect that (issue #28), not now.date().
+    assert (tmp_path / "last-quiet").read_text() == "2026-04-26"
+
+
+def test_small_hours_catchup_then_missed_next_sleep_hour_both_catch_up(
+    tmp_path, monkeypatch
+):
+    """Issue #28 end-to-end: day N's 21:00 is missed and caught up at 02:00
+    on day N+1; a normal daytime render happens fine; day N+1's *own* 21:00
+    is then also missed, and a 22:30 boot that night must still paint a
+    second quiet catch-up rather than wrongly finding today's date already
+    'covered' by the earlier small-hours catch-up."""
+    cfg = _simple_live_config(tmp_path)
+
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+    from datetime import timezone as _tz
+
+    PT = _tz(_td(hours=-7))
+    monkeypatch.setattr("kidage.__main__._system_zone", lambda: PT)
+    _state_in_tmp(monkeypatch, tmp_path)
+
+    # 1. Day N (04-26) 21:00 sleep_hour is missed entirely (Pi off — no
+    #    main() call). Day N+1 (04-27) 02:00: Persistent=true catch-up fires.
+    class SmallHoursCatchup(_dt):
+        @classmethod
+        def now(cls, tz=None):
+            return _dt(2026, 4, 27, 2, 0, tzinfo=tz)
+
+    monkeypatch.setattr("kidage.__main__.datetime", SmallHoursCatchup)
+    calls = _called_show(monkeypatch)
+    assert main(["--config", str(cfg)]) == 0
+    assert len(calls) == 1, "first catch-up must paint"
+    assert (tmp_path / "last-quiet").read_text() == "2026-04-26"
+
+    # 2. A normal daytime render later on day N+1 must not touch last-quiet.
+    class Daytime(_dt):
+        @classmethod
+        def now(cls, tz=None):
+            return _dt(2026, 4, 27, 12, 0, tzinfo=tz)
+
+    monkeypatch.setattr("kidage.__main__.datetime", Daytime)
+    daytime_calls = _called_show(monkeypatch)
+    assert main(["--config", str(cfg)]) == 0
+    assert len(daytime_calls) == 1
+    assert (tmp_path / "last-quiet").read_text() == "2026-04-26"
+
+    # 3. Day N+1's own 21:00 sleep_hour is also missed (Pi off again — no
+    #    main() call). 22:30 boot that same night must still catch up,
+    #    since today's (04-27) sleep_hour was never actually rendered.
+    class LateBootSameNight(_dt):
+        @classmethod
+        def now(cls, tz=None):
+            return _dt(2026, 4, 27, 22, 30, tzinfo=tz)
+
+    monkeypatch.setattr("kidage.__main__.datetime", LateBootSameNight)
+    second_calls = _called_show(monkeypatch)
+    assert main(["--config", str(cfg)]) == 0
+    assert len(second_calls) == 1, "second same-night catch-up must paint"
     assert (tmp_path / "last-quiet").read_text() == "2026-04-27"
 
 
