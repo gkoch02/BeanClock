@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import os
 import signal
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
+from types import FrameType
 
 from PIL import Image
 
@@ -41,14 +43,14 @@ class DisplayInitError(RuntimeError):
 
 
 @contextmanager
-def _deadline(seconds: int, what: str):
+def _deadline(seconds: int, what: str) -> Iterator[None]:
     """Bound a blocking hardware call with SIGALRM.
 
     POSIX-only by design — this appliance only ever runs on Linux (Pi Zero W
     2), same assumption the rest of the hardware path already makes.
     """
 
-    def _on_alarm(signum, frame):
+    def _on_alarm(signum: int, frame: FrameType | None) -> None:
         raise DisplayTimeoutError(
             f"{what} did not complete within {seconds}s (stuck BUSY pin?)"
         )

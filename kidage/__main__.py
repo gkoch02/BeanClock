@@ -267,7 +267,13 @@ def main(argv: list[str] | None = None) -> int:
         # sleep_hour would find today's date already marked "covered" (by
         # yesterday's catch-up) and wrongly skip its own catch-up — the
         # two-boot-per-night scenario in issue #28.
-        record_quiet(quiet_catchup_date if quiet_catchup else now.date())
+        if quiet_catchup:
+            # quiet_catchup is only ever set True after quiet_catchup_date is
+            # assigned a real date (see above) — static-check belt-and-braces.
+            assert quiet_catchup_date is not None
+            record_quiet(quiet_catchup_date)
+        else:
+            record_quiet(now.date())
     return 0
 
 
