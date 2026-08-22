@@ -47,6 +47,11 @@ the age is spelled out. A spread:
   `full`-mode totals, so the panel doesn't sit overnight showing yesterday's
   hour count. If the Pi happened to be off at `sleep_hour`, the first run
   after boot paints the quiet layout once as a catch-up.
+- **Bounded hardware calls** — every e-paper call (init / refresh / sleep)
+  runs under its own deadline, so a stuck BUSY pin fails the run loudly
+  within a bounded time instead of hanging the service and blocking every
+  later hourly refresh. The panel is always put back to sleep, even when
+  init or refresh failed.
 - Pure-Python, vendored Waveshare driver — no apt-time setup beyond Pillow's
   runtime libs.
 
@@ -188,6 +193,15 @@ tests/                        # pure-Python (no panel)
   detection`** — SPI is not enabled or the user is not in the `spi`/`gpio`
   groups. Re-run the installer.
 - **Display is upside down** — set `flip = true` in `config.toml`.
+- **`DisplayTimeoutError: ... did not complete within Ns (stuck BUSY pin?)`**
+  — the panel never released its BUSY pin. Usually a poorly seated ribbon
+  cable or a failing panel; reseat the HAT and the FPC connector. The run
+  fails at 30s (init), 60s (refresh) or 10s (sleep) rather than hanging the
+  hourly timer, so the next hour's fire is unaffected.
+- **`DisplayInitError: epd.init() returned -1`** — the driver's own hardware
+  init failed, most often because SPI is unavailable or the panel is not
+  responding. Check `lsmod | grep spi` and the wiring before suspecting the
+  application.
 - **Ghosting** — the daily clear at the first wake-hour fire wipes residual
   burn-in. Force one with `sudo rm /var/lib/kidage/last-clear && sudo
   systemctl start kidage.service`.
