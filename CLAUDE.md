@@ -68,6 +68,35 @@ run, delete that file. The state directory is overridable via
 panel's drive voltage and releases SPI/GPIO (`epdconfig.module_exit`), so
 a failed `Clear()`/`display()` must not skip it.
 
+**Bounded hardware calls.** The vendored driver's `busy()` spins on the
+BUSY pin with no timeout of its own, so a stuck pin (faulty panel, bad
+ribbon cable) would hang this oneshot forever and block every future
+hourly timer run. `display.show` therefore wraps each phase of the call
+sequence in `_deadline()` — a SIGALRM-based context manager — with its
+own budget: `INIT_TIMEOUT_SEC` (30), `REFRESH_TIMEOUT_SEC` (60),
+`SLEEP_TIMEOUT_SEC` (10). An overrun raises `DisplayTimeoutError`. The
+split is deliberate: `init()` and `display()` each cross `busy()` several
+times (SWRESET, register writes, the refresh itself), while `sleep()`
+never polls BUSY at all and is bounded only against a wedged SPI write.
+`systemd/kidage.service` sets `TimeoutStartSec=150`, comfortably above
+the 100s sum, as defense in depth against a hang *outside* the guarded
+calls — keep it above the sum if you retune the budgets. SIGALRM makes
+this POSIX-only, the same assumption the rest of the hardware path
+already makes.
+
+**Init failure is explicit, and cleanup never masks it.** `epd.init()`
+returning `-1` — the vendored driver's documented failure sentinel —
+raises `DisplayInitError` instead of silently continuing to paint into
+an uninitialized panel. The `finally:` cleanup invariant is unchanged:
+`epd.sleep()` still always runs, *including* after a failed or timed-out
+`init()`, because `module_init()` (called inside `epd.init()`) claims
+SPI/GPIO before the first BUSY wait and those resources need releasing
+either way. But `sleep()` can itself raise on that path (the SPI bus may
+never have opened), so its failure is only propagated when no error is
+already in flight; otherwise it's logged via `log.exception` and
+suppressed so the secondary failure can't replace the more useful
+original.
+
 **Variable font.** `kidage/fonts/Fredoka.ttf` is a single variable TTF with weight
 and width axes. `render._font(size, weight)` calls
 `set_variation_by_name(weight)` (`Light` / `Regular` / `Medium` / `SemiBold`
@@ -269,6 +298,12 @@ directly, which is hardware-free. `tests/test_display.py` does import
 inside `show()` then resolves to the stub, so `RPi.GPIO` / `spidev` are
 never loaded. Reuse the `monkeypatch.setitem(sys.modules, …)` fixture in
 that file if you need to exercise `display.show` again.
+
+The timeout paths are covered by `StuckBusyEPD`, a `FakeEPD` subclass whose
+named hardware call spins forever the way the vendored `busy()` loop does;
+tests monkeypatch the relevant `*_TIMEOUT_SEC` constant down to 1 so the
+real budgets don't slow the suite. If you add another guarded call, shrink
+its constant the same way rather than sleeping for the production budget.
 
 Use `compose_preview(black, red)` to get an RGB image, or check
 `image.tobytes()` for inked pixels — `Image.getdata()` is deprecated in
