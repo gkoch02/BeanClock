@@ -5,7 +5,10 @@ Description=Render and push kid age to e-paper
 Type=oneshot
 Environment=KIDAGE_CONFIG=/etc/kidage/config.toml
 Environment=KIDAGE_STATE_DIR=/var/lib/kidage
-WorkingDirectory=/opt/kidage
+# gpiozero's preferred lgpio backend creates its notification pipe in the
+# process working directory.  ProtectSystem=strict makes /opt/kidage
+# read-only, while StateDirectory guarantees this directory is writable.
+WorkingDirectory=/var/lib/kidage
 ExecStart=/opt/kidage/.venv/bin/python -m kidage
 # Defense in depth on top of kidage/display.py's own SIGALRM-based bounds
 # around each EPD hardware call (init/refresh/sleep sum to 100s at most). A
