@@ -225,6 +225,6 @@ tests/                        # pure-Python (no panel)
 
 ## Licenses
 
-- `kidage/`, `tests/`, `scripts/`, `systemd/` — MIT (see `LICENSE`).
+- Everything in this repository except the two items below — MIT (see `LICENSE`).
 - `vendor/waveshare_epd/` — MIT, © Waveshare.
 - `kidage/fonts/Fredoka.ttf` — SIL Open Font License 1.1, see `kidage/fonts/OFL.txt`.
