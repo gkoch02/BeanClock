@@ -1,11 +1,14 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "kidage"
 version = "0.1.0"
 description = "Tracks how old a kiddo is on a Waveshare 2.13\" b/r e-paper display."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
     "Pillow>=10",
