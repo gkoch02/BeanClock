@@ -8,7 +8,10 @@ version = "0.1.0"
 description = "Tracks how old a kiddo is on a Waveshare 2.13\" b/r e-paper display."
 readme = "README.md"
 license = "MIT"
-license-files = ["LICENSE"]
+# Fredoka.ttf ships inside the wheel under the OFL, so its license text is
+# declared alongside the project's own — a metadata-only consumer would
+# otherwise see MIT as the sole License-File.
+license-files = ["LICENSE", "kidage/fonts/OFL.txt"]
 requires-python = ">=3.11"
 dependencies = [
     "Pillow>=10",
