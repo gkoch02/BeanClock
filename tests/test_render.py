@@ -141,12 +141,6 @@ def test_compose_preview_is_rgb_panel_size():
 ACCENTS = ("heart", "star", "balloon", "moon", "sun", "flower")
 
 
-def test_render_accepts_known_accents():
-    for accent in ACCENTS:
-        b, r = render("Lilah", TWO_YEARS, BORN, accent=accent)
-        assert _has_ink(r)
-
-
 def test_accents_produce_distinct_red_planes():
     """Each accent must actually paint differently; otherwise an accent-fn
     regression (e.g. _ACCENTS.get always returning the default) would slip
@@ -229,16 +223,24 @@ def test_format_full_adds_ink_in_bottom_corners():
     )
 
 
-def test_format_full_uses_total_fields_not_calendar():
-    """The corner totals must reflect age.total_days / age.total_hours.
-    Two ages with identical calendar (years/months/days/hours) but
-    different totals should diverge in the bottom band of the black
-    plane (where the hero/sub above is identical)."""
-    big = AgeBreakdown(3, 7, 15, 4, total_days=1324, total_hours=31780)
-    small = AgeBreakdown(3, 7, 15, 4, total_days=42, total_hours=999)
-    big_black, _ = render("Lilah", big, BORN, age_format="full")
-    small_black, _ = render("Lilah", small, BORN, age_format="full")
-    assert big_black.tobytes() != small_black.tobytes()
+def test_format_full_corners_read_total_days_and_total_hours():
+    """Left corner tracks total_days only; right corner tracks total_hours only."""
+    base = AgeBreakdown(3, 7, 15, 4, total_days=1324, total_hours=31780)
+    other_days = AgeBreakdown(3, 7, 15, 4, total_days=42, total_hours=31780)
+    other_hours = AgeBreakdown(3, 7, 15, 4, total_days=1324, total_hours=999)
+    footer_y = HEIGHT - FRAME_PAD - 15
+    left_box = (0, footer_y, WIDTH // 3, HEIGHT)
+    right_box = (2 * WIDTH // 3, footer_y, WIDTH, HEIGHT)
+
+    def corners(age):
+        black, _ = render("Lilah", age, BORN, age_format="full")
+        return black.crop(left_box).tobytes(), black.crop(right_box).tobytes()
+
+    base_l, base_r = corners(base)
+    days_l, days_r = corners(other_days)
+    hours_l, hours_r = corners(other_hours)
+    assert days_l != base_l and days_r == base_r
+    assert hours_l == base_l and hours_r != base_r
 
 
 def test_format_full_preserves_extended_hero_and_sub():
@@ -607,16 +609,13 @@ def test_quiet_combines_with_after_hours():
 
 
 def test_hero_shrink_loop_stops_at_16pt_floor():
-    """The hero shrink loop bottoms out at 16pt (`hero_size > 16`). For text
-    that even 16pt can't fit, the loop should stop — not crash, not loop
-    forever. Pin the floor by rendering an overlong special and checking
-    that ink lands in the hero band (i.e. the loop exited cleanly)."""
+    """Text too wide even at 16pt is painted at exactly 16pt, not smaller."""
     overlong = "Happy 100th Birthday from Grandma and Grandpa!"
     black, _ = render("Lilah", AGE, BORN, special=overlong)
-    # Ink in the hero band confirms we exited the shrink loop and painted
-    # something — even if the something clips the budget.
-    extent = _ink_x_extent(black, range(33, 62))
-    assert extent is not None
+    expected = Image.new("1", (WIDTH, HEIGHT), 1)
+    _draw_centered(ImageDraw.Draw(expected), 33, overlong, _font(16, "Bold"))
+    hero_band = (FRAME_PAD, 33, WIDTH - FRAME_PAD, 62)
+    assert black.crop(hero_band).tobytes() == expected.crop(hero_band).tobytes()
 
 
 def test_long_name_header_shrinks_into_accent_budget():

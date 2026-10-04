@@ -30,5 +30,7 @@
       the `_reject_unknown` allow-lists in `kidage/config.py`
 - [ ] `vendor/waveshare_epd/` is untouched (fixes belong in
       `kidage/display.py`)
-- [ ] `CLAUDE.md` / `README.md` updated if this changes a documented
-      invariant or user-facing behavior
+- [ ] `README.md` updated if user-facing behavior changed
+- [ ] `CLAUDE.md` changed only if a rule that spans files was added,
+      changed, or removed; rationale lives in the commit message, and code
+      comments stay at ~3 lines of non-obvious why

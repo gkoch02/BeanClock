@@ -201,7 +201,7 @@ def _draw_frame(
 
     corners = ((9, 9), (WIDTH - 10, 9), (9, HEIGHT - 10), (WIDTH - 10, HEIGHT - 10))
     for cx, cy in corners:
-        if accent == "heart":
+        if accent == "heart":  # hearts lose their shape at 4px
             _draw_corner_dot(rd, cx, cy)
         else:
             accent_fn(rd, cx, cy, size=4)
@@ -297,7 +297,7 @@ def render(
     fx = (WIDTH - fw) // 2
     fy = HEIGHT - FRAME_PAD - 13
     rd.text((fx, fy), footer, font=footer_font, fill=0)
-    if accent != "heart":
+    if accent != "heart":  # the heart theme reads cleaner without one
         accent_fn(rd, fx - 12, fy + 8, size=7)
 
     # `full` augments the extended layout with compact total_days /
@@ -320,12 +320,8 @@ def render(
         # Swap 0↔1 on the black plane: white panel background becomes black
         # ink, drawn text becomes "no ink" (bare panel = white).
         inverted = black.point(lambda px: 0 if px else 1)
-        # The Waveshare driver ORs the two planes onto the panel, so a
-        # uniformly-black plane would mask out every red bead/accent. Punch
-        # black back out wherever red has ink so red stays visible against
-        # the new black background — the user wants black/white inverted
-        # but red preserved. The mask is 1 exactly where red has ink; pasting
-        # "no ink" (1) through it forces those pixels back to bare panel.
+        # Black ink masks red on the panel, so clear black wherever red has
+        # ink or the inverted background would hide every red accent.
         inverted.paste(1, mask=red.point(lambda px: 0 if px else 1))
         black = inverted
 
