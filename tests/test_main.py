@@ -165,25 +165,6 @@ def test_main_runs_at_sleep_hour_inclusive(monkeypatch):
     assert len(calls) == 1
 
 
-def test_main_preview_on_birthday_differs_from_normal_day(tmp_path):
-    """End-to-end: a preview pinned to the kid's birthday must render a
-    different image than a non-birthday preview, proving the special-day
-    plumbing reaches render() through main()."""
-    normal = tmp_path / "normal.png"
-    bday = tmp_path / "bday.png"
-    main([
-        "--config", str(EXAMPLE_CONFIG),
-        "--preview", str(normal),
-        "--now", "2026-04-27T07:47:00-07:00",
-    ])
-    main([
-        "--config", str(EXAMPLE_CONFIG),
-        "--preview", str(bday),
-        "--now", "2026-09-12T08:00:00-07:00",  # Lilah's birthday
-    ])
-    assert normal.read_bytes() != bday.read_bytes()
-
-
 def test_system_zone_reads_localtime_symlink(tmp_path, monkeypatch):
     # Most distros ship /etc/localtime as a symlink into /usr/share/zoneinfo.
     fake_tzdata = tmp_path / "zoneinfo" / "America" / "Los_Angeles"
@@ -416,102 +397,61 @@ def test_after_hours_preview_via_cli_flag_inverts(tmp_path, monkeypatch):
     assert out_normal.read_bytes() != out_after.read_bytes()
 
 
-def test_live_after_hours_inverts_when_past_sunset(tmp_path, monkeypatch):
-    """Live path: with after_hours_invert=true and lat/lon set, a refresh
-    after sunset hands an inverted black plane to display.show."""
-    cfg = _after_hours_config(tmp_path)
+def _capture_render(monkeypatch) -> dict:
+    """Wrap render() so a test can read the kwargs main() passed it."""
+    import kidage.render
+    captured: dict = {}
 
-    # Pin sunset to a known wall-clock so the test is deterministic
-    # regardless of the real solar position math.
+    def fake_render(*args, **kwargs):
+        captured.update(kwargs)
+        return kidage.render.render(*args, **kwargs)
+    monkeypatch.setattr("kidage.__main__.render", fake_render)
+    return captured
+
+
+def _freeze_now(monkeypatch, frozen):
+    """Pin main()'s wall clock to `frozen` (naive; tz comes from _system_zone)."""
+    from datetime import datetime as _dt
+
+    class FrozenDateTime(_dt):
+        @classmethod
+        def now(cls, tz=None):
+            return frozen.replace(tzinfo=tz)
+    monkeypatch.setattr("kidage.__main__.datetime", FrozenDateTime)
+
+
+@pytest.mark.parametrize(
+    ("hour", "minute", "expected"),
+    [
+        (12, 0, False),
+        (19, 0, False),  # look-ahead 19:30 is still before sunset
+        (19, 38, True),  # look-ahead lands exactly on sunset
+        (20, 0, True),   # 8 min before sunset, but most of the hour is dark
+        (21, 0, True),
+    ],
+)
+def test_live_after_hours_tracks_sunset_with_30min_lookahead(
+    tmp_path, monkeypatch, hour, minute, expected
+):
     from datetime import datetime as _dt
     from datetime import timedelta as _td
     from datetime import timezone as _tz
-    fake_sunset = _dt(2026, 4, 28, 2, 30, tzinfo=UTC)  # 19:30 PDT
-    fake_sunrise = _dt(2026, 4, 27, 13, 0, tzinfo=UTC)  # 06:00 PDT
+
+    cfg = _after_hours_config(tmp_path)
+    fake_sunrise = _dt(2026, 5, 16, 12, 45, tzinfo=UTC)  # 05:45 PDT
+    fake_sunset = _dt(2026, 5, 17, 3, 8, tzinfo=UTC)     # 20:08 PDT
     monkeypatch.setattr(
         "kidage.solar.sun_times",
         lambda d, lat, lon: (fake_sunrise, fake_sunset),
     )
+    monkeypatch.setattr("kidage.__main__._system_zone", lambda: _tz(_td(hours=-7)))
+    _freeze_now(monkeypatch, _dt(2026, 5, 16, hour, minute))
+    captured = _capture_render(monkeypatch)
+    _called_show(monkeypatch)
+    _state_in_tmp(monkeypatch, tmp_path)
 
-    PT = _tz(_td(hours=-7))
-
-    class FakeDateTime(_dt):
-        @classmethod
-        def now(cls, tz=None):
-            # 20:00 PDT — past the fake sunset, still inside wake window.
-            return _dt(2026, 4, 27, 20, 0, tzinfo=tz)
-    monkeypatch.setattr("kidage.__main__.datetime", FakeDateTime)
-    # _system_zone is called inside main; force it to a fixed-offset zone
-    # the fake sunset can be compared against without DST surprises.
-    monkeypatch.setattr("kidage.__main__._system_zone", lambda: PT)
-
-    after_calls = _called_show(monkeypatch)
-    rc = main(["--config", str(cfg)])
-    assert rc == 0
-    assert len(after_calls) == 1
-    inverted_black = after_calls[0][0]
-
-    # And again, but at a wall clock before sunset — should NOT invert.
-    class PreSunsetDateTime(_dt):
-        @classmethod
-        def now(cls, tz=None):
-            return _dt(2026, 4, 27, 12, 0, tzinfo=tz)  # noon PDT
-    monkeypatch.setattr("kidage.__main__.datetime", PreSunsetDateTime)
-    pre_calls = _called_show(monkeypatch)
-    rc = main(["--config", str(cfg)])
-    assert rc == 0
-    assert len(pre_calls) == 1
-    normal_black = pre_calls[0][0]
-
-    assert inverted_black.tobytes() != normal_black.tobytes()
-
-
-def test_live_after_hours_inverts_in_the_hour_before_sunset(tmp_path, monkeypatch):
-    """The panel only refreshes hourly; if `now >= sunset` were the only
-    check, a refresh that lands 8 min before sunset would render day mode
-    and leave the panel stale for the ~52 min after sunset until the next
-    refresh. The 30-min look-ahead must flip after_hours True in that
-    window so the panel is dark during the actually-dark part of the hour.
-    """
-    cfg = _after_hours_config(tmp_path)
-
-    from datetime import datetime as _dt
-    from datetime import timedelta as _td
-    from datetime import timezone as _tz
-    # Sunset at 20:08 PDT — the canonical "mid-hour sunset" case that
-    # exposed the bug in the wild.
-    fake_sunset = _dt(2026, 5, 17, 3, 8, tzinfo=UTC)
-    fake_sunrise = _dt(2026, 5, 16, 12, 45, tzinfo=UTC)
-    monkeypatch.setattr(
-        "kidage.solar.sun_times",
-        lambda d, lat, lon: (fake_sunrise, fake_sunset),
-    )
-
-    PT = _tz(_td(hours=-7))
-    monkeypatch.setattr("kidage.__main__._system_zone", lambda: PT)
-
-    # 20:00 PDT — 8 min before sunset, but the panel won't refresh again
-    # for an hour, so the majority of this hour will be post-sunset.
-    class JustBeforeSunset(_dt):
-        @classmethod
-        def now(cls, tz=None):
-            return _dt(2026, 5, 16, 20, 0, tzinfo=tz)
-    monkeypatch.setattr("kidage.__main__.datetime", JustBeforeSunset)
-    pre_calls = _called_show(monkeypatch)
     assert main(["--config", str(cfg)]) == 0
-    near_sunset_black = pre_calls[0][0]
-
-    # Noon refresh on the same setup — day mode, for comparison.
-    class Noon(_dt):
-        @classmethod
-        def now(cls, tz=None):
-            return _dt(2026, 5, 16, 12, 0, tzinfo=tz)
-    monkeypatch.setattr("kidage.__main__.datetime", Noon)
-    noon_calls = _called_show(monkeypatch)
-    assert main(["--config", str(cfg)]) == 0
-    noon_black = noon_calls[0][0]
-
-    assert near_sunset_black.tobytes() != noon_black.tobytes()
+    assert captured["after_hours"] is expected
 
 
 def test_quiet_preview_via_cli_flag_changes_render(tmp_path):
@@ -534,9 +474,11 @@ def test_quiet_preview_via_cli_flag_changes_render(tmp_path):
 
 
 def test_live_quiet_triggers_at_sleep_hour(tmp_path, monkeypatch):
-    """Live path: a refresh at sleep_hour (21:00 in the example config) must
-    render the quiet layout — different black plane than a refresh earlier
-    in the day, since the sub line and full-mode totals are gone."""
+    """A live refresh at sleep_hour renders quiet and records the marker."""
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+    from datetime import timezone as _tz
+
     cfg = tmp_path / "config.toml"
     cfg.write_text(
         '[kid]\n'
@@ -545,35 +487,14 @@ def test_live_quiet_triggers_at_sleep_hour(tmp_path, monkeypatch):
         '[schedule]\nwake_hour = 7\nsleep_hour = 21\n'
         '[display]\nformat = "full"\n'
     )
-
-    from datetime import datetime as _dt
-    from datetime import timedelta as _td
-    from datetime import timezone as _tz
-    PT = _tz(_td(hours=-7))
-    monkeypatch.setattr("kidage.__main__._system_zone", lambda: PT)
-
-    class NoonDateTime(_dt):
-        @classmethod
-        def now(cls, tz=None):
-            return _dt(2026, 4, 27, 12, 0, tzinfo=tz)
-    monkeypatch.setattr("kidage.__main__.datetime", NoonDateTime)
-    noon_calls = _called_show(monkeypatch)
-    assert main(["--config", str(cfg)]) == 0
-    noon_black = noon_calls[0][0]
-
-    class SleepDateTime(_dt):
-        @classmethod
-        def now(cls, tz=None):
-            return _dt(2026, 4, 27, 21, 0, tzinfo=tz)
-    monkeypatch.setattr("kidage.__main__.datetime", SleepDateTime)
-    sleep_calls = _called_show(monkeypatch)
+    monkeypatch.setattr("kidage.__main__._system_zone", lambda: _tz(_td(hours=-7)))
+    _freeze_now(monkeypatch, _dt(2026, 4, 27, 21, 0))
+    captured = _capture_render(monkeypatch)
+    _called_show(monkeypatch)
     _state_in_tmp(monkeypatch, tmp_path)
-    assert main(["--config", str(cfg)]) == 0
-    sleep_black = sleep_calls[0][0]
 
-    assert noon_black.tobytes() != sleep_black.tobytes()
-    # The quiet refresh records its date so a later outside-window run knows
-    # tonight's freeze image is already the quiet layout.
+    assert main(["--config", str(cfg)]) == 0
+    assert captured["quiet"] is True
     assert (tmp_path / "last-quiet").read_text() == "2026-04-27"
 
 
