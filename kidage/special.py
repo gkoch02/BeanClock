@@ -36,12 +36,8 @@ def detect(
     birthday: bool,
     milestones: Sequence[int],
 ) -> str | None:
-    # Project born_at into now's zone before any calendar comparison — the
-    # same wall-clock semantics age.compute uses. Without this, a birth near
-    # midnight plus a DST shift or a family move across zones puts the
-    # banner on a different day than the years/months rollover (e.g. born
-    # 23:47 PT, Pi in ET: the banner would fire Sep 12 while the age math
-    # flips Sep 13 — painting "Happy 4th Birthday!" over "3 years 11 months").
+    # Same wall-clock projection as age.compute, so a near-midnight birth
+    # celebrates on the day the years/months roll over.
     born_local = born_at.astimezone(now.tzinfo)
     if birthday and _is_birthday(born_local, now):
         # Use the calendar-year delta, not age.years: age.years only ticks over

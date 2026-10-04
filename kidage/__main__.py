@@ -16,11 +16,9 @@ from kidage.special import detect as detect_special
 
 log = logging.getLogger("kidage")
 
-# scripts/install.sh writes `git describe --always --dirty --tags` to
-# /opt/kidage/VERSION (the install dir, also hardcoded in systemd/kidage.service
-# and install.sh). The __file__-relative path is the editable-install fallback
-# for `pip install -e .` dev work — under a non-editable install (which the
-# installer uses) __file__ lives in site-packages, not the install root.
+# install.sh writes /opt/kidage/VERSION. The installer's non-editable install
+# puts __file__ in site-packages, so the relative path is the `pip install -e .`
+# fallback only.
 VERSION_FILE_CANDIDATES = [
     Path("/opt/kidage/VERSION"),
     Path(__file__).resolve().parent.parent / "VERSION",
@@ -55,13 +53,9 @@ def _version_string() -> str:
 
 
 def _system_zone() -> ZoneInfo:
-    # age.compute needs a DST-aware tzinfo to project born_at correctly across
-    # DST boundaries. datetime.now().astimezone() yields a fixed-offset
-    # datetime.timezone for the *current* moment, which can't replay a winter
-    # birth's offset in summer — so resolve the IANA name from the OS instead.
-    # Pi OS ships /etc/localtime as a symlink and /etc/timezone as a one-line
-    # IANA name; if a future host ever ships /etc/localtime as a *copy* of the
-    # tzdata blob with no /etc/timezone next to it, this falls back to UTC.
+    # A ZoneInfo, not datetime.now().astimezone(): that returns a fixed offset
+    # for the current moment, which can't replay a winter birth's offset in
+    # summer, so the anniversary would slip an hour across DST.
     p = Path("/etc/localtime")
     if p.is_symlink():
         target = os.readlink(p)
@@ -130,11 +124,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     cfg = load(args.config or _default_config_path())
-    # The live path needs a DST-aware ZoneInfo (not the fixed-offset tzinfo
-    # from `datetime.now().astimezone()`); otherwise age.compute can't project
-    # a winter-saved born_at into a summer wall clock and the anniversary
-    # slips an hour. --now keeps the caller's offset so layout previews show
-    # the exact wall clock requested.
+    # --now keeps the caller's offset so previews show the exact wall clock.
     if args.now:
         try:
             now = datetime.fromisoformat(args.now)
@@ -147,23 +137,15 @@ def main(argv: list[str] | None = None) -> int:
     else:
         now = datetime.now(tz=_system_zone())
 
-    # The systemd timer fires hourly all day, so the wake/sleep window in
-    # config is what actually decides which hours touch the panel. --preview
-    # bypasses the window so layout work doesn't depend on wall-clock time.
+    # The timer fires hourly all day; the config's wake window decides which
+    # hours touch the panel.
     quiet_catchup = False
-    # The calendar date of the sleep-window this run's catch-up would cover
-    # (only meaningful when quiet_catchup ends up True). A small-hours boot
-    # (now.hour <= sleep_hour, i.e. after midnight) is catching up on
-    # *yesterday's* missed sleep_hour, not today's — the marker recorded
-    # below must reflect that, or a same-day miss recorded later that same
-    # calendar day would look like it already happened (issue #28).
+    # The sleep_hour this catch-up covers: yesterday's, if we're past midnight.
     quiet_catchup_date = None
     if args.preview is None and not (cfg.wake_hour <= now.hour <= cfg.sleep_hour):
         if args.now is None:
-            # If the Pi was off at sleep_hour, the panel is frozen overnight
-            # on volatile metrics (the freeze the quiet layout exists to
-            # prevent). Persistent=true delivers a catch-up run after boot;
-            # use it to paint the quiet layout once, then go back to skipping.
+            # Pi was off at sleep_hour: paint the quiet layout once so the
+            # panel doesn't freeze overnight on volatile metrics.
             from kidage.display import quiet_refreshed_since
             quiet_catchup_date = (
                 now.date()
@@ -182,9 +164,7 @@ def main(argv: list[str] | None = None) -> int:
             cfg.sleep_hour,
         )
 
-    # Last refresh before quiet hours: the panel freezes on this image until
-    # the next morning, so suppress volatile metrics. Live path only —
-    # previews stay literal unless --quiet is passed.
+    # The sleep_hour image stays up overnight, so drop volatile metrics.
     quiet = args.quiet or quiet_catchup
     if not quiet and args.now is None:
         quiet = now.hour == cfg.sleep_hour
@@ -193,25 +173,15 @@ def main(argv: list[str] | None = None) -> int:
 
     after_hours = args.after_hours
     if not after_hours and cfg.after_hours_invert and args.now is None:
-        # Live path only: compare wall-clock now to today's sunset at the
-        # configured location. --now previews stay literal (no surprise
-        # inversion) — use --after-hours to force the inverted look.
-        # config.load() guarantees lat/lon are set when after_hours_invert
-        # is true, so the asserts here are static-check belt-and-braces.
         from kidage.solar import polar_night, sun_times
+        # config.load() requires lat/lon when after_hours_invert is set.
         assert cfg.latitude is not None
         assert cfg.longitude is not None
         times = sun_times(now.date(), cfg.latitude, cfg.longitude)
         if times is not None:
             sunrise_local = times[0].astimezone(now.tzinfo)
             sunset_local = times[1].astimezone(now.tzinfo)
-            # Look 30 min ahead, not at `now` itself: the panel only refreshes
-            # hourly, so a naïve `now >= sunset` leaves a stale day-mode image
-            # on the panel for up to ~50 min when sunset falls mid-hour. The
-            # 30-min midpoint flips the panel dark when >half of the upcoming
-            # hour will be post-sunset. The same midpoint applies on the
-            # sunrise side so dark winter mornings (wake_hour before sunrise)
-            # render the inverted look too.
+            # This image stays up for an hour; go dark if most of it is.
             ahead = now + timedelta(minutes=30)
             after_hours = ahead < sunrise_local or ahead >= sunset_local
             log.info(
@@ -219,8 +189,7 @@ def main(argv: list[str] | None = None) -> int:
                 sunrise_local.isoformat(), sunset_local.isoformat(), after_hours,
             )
         else:
-            # Sun never crosses the horizon today. Polar night stays dark all
-            # day; polar day stays bright.
+            # Sun never crosses the horizon today.
             after_hours = polar_night(now.date(), cfg.latitude, cfg.longitude)
             log.info("no sunrise/sunset today; after_hours=%s", after_hours)
 
@@ -237,9 +206,7 @@ def main(argv: list[str] | None = None) -> int:
     if special is not None:
         log.info("special-day display: %r", special)
 
-    # The footer prints born_at's calendar date; project it into now's zone
-    # so it names the same wall-clock day the age math and birthday banner
-    # flip on (matters for births near midnight after a DST or zone change).
+    # Project into now's zone so the footer date matches the age math.
     black, red = render(
         cfg.name,
         age,
@@ -260,20 +227,9 @@ def main(argv: list[str] | None = None) -> int:
     from kidage.display import record_quiet, show
     show(black, red, today=now.date())
     if quiet and args.now is None:
-        # Record the date of the sleep-window this refresh actually covers,
-        # not necessarily "today": a small-hours catch-up (quiet_catchup_date
-        # set above) is covering *yesterday's* missed sleep_hour, so the
-        # marker must say yesterday. Otherwise a later miss of *today's* own
-        # sleep_hour would find today's date already marked "covered" (by
-        # yesterday's catch-up) and wrongly skip its own catch-up — the
-        # two-boot-per-night scenario in issue #28.
-        if quiet_catchup:
-            # quiet_catchup is only ever set True after quiet_catchup_date is
-            # assigned a real date (see above) — static-check belt-and-braces.
-            assert quiet_catchup_date is not None
-            record_quiet(quiet_catchup_date)
-        else:
-            record_quiet(now.date())
+        # Mark the sleep_hour this refresh covered, not necessarily today's,
+        # or a later miss of today's own sleep_hour would be skipped.
+        record_quiet(quiet_catchup_date or now.date())
     return 0
 
 

@@ -17,28 +17,16 @@ STATE_DIR = Path(os.environ.get("KIDAGE_STATE_DIR", "/var/lib/kidage"))
 LAST_CLEAR_FILE = STATE_DIR / "last-clear"
 LAST_QUIET_FILE = STATE_DIR / "last-quiet"
 
-# The vendored driver's busy() (vendor/waveshare_epd/epd2in13b_V4.py) spins
-# on the BUSY pin with no timeout of its own — a stuck/faulty panel would
-# otherwise hang this oneshot service forever, blocking every future hourly
-# timer run. Each of these bounds one phase of the hardware call sequence;
-# systemd/kidage.service sets TimeoutStartSec comfortably above their sum as
-# defense in depth. init()/display() go through busy() several times each
-# (SWRESET, register writes, the refresh itself) so they get the larger
-# budgets; sleep() only sends DEEP_SLEEP + a fixed 2s delay and doesn't poll
-# BUSY at all, but it's still bounded in case a flaky panel wedges the SPI
-# write itself.
+# The vendored busy() spins on the BUSY pin with no timeout, so a stuck panel
+# would hang this oneshot and every later timer run. Keep TimeoutStartSec in
+# systemd/kidage.service above the sum of these.
 INIT_TIMEOUT_SEC = 30
 REFRESH_TIMEOUT_SEC = 60
 SLEEP_TIMEOUT_SEC = 10
 
 
 class DisplayTimeoutError(RuntimeError):
-    """A blocking EPD hardware call exceeded its bounded deadline.
-
-    The most likely cause is a permanently-asserted BUSY pin (stuck/faulty
-    panel, bad ribbon cable, etc.) — the vendored driver's busy() loop has
-    no timeout of its own.
-    """
+    """A blocking EPD hardware call exceeded its deadline (stuck BUSY pin?)."""
 
 
 class DisplayInitError(RuntimeError):
@@ -47,11 +35,7 @@ class DisplayInitError(RuntimeError):
 
 @contextmanager
 def _deadline(seconds: int, what: str) -> Iterator[None]:
-    """Bound a blocking hardware call with SIGALRM.
-
-    POSIX-only by design — this appliance only ever runs on Linux (Pi Zero W
-    2), same assumption the rest of the hardware path already makes.
-    """
+    """Bound a blocking hardware call with SIGALRM (POSIX-only)."""
 
     def _on_alarm(signum: int, frame: FrameType | None) -> None:
         raise DisplayTimeoutError(
@@ -81,12 +65,7 @@ def _record_clear(today: date) -> None:
 
 
 def quiet_refreshed_since(cutoff: date) -> bool:
-    """True if a quiet-layout refresh has been recorded on/after `cutoff`.
-
-    Backs the missed-sleep_hour catch-up in __main__: if the Pi was off at
-    sleep_hour, the panel is frozen overnight on volatile metrics, so a boot
-    later that night should paint the quiet layout exactly once.
-    """
+    """True if a quiet-layout refresh has been recorded on/after `cutoff`."""
     try:
         recorded = date.fromisoformat(LAST_QUIET_FILE.read_text().strip())
     except (FileNotFoundError, ValueError):
@@ -108,11 +87,7 @@ def show(black: Image.Image, red: Image.Image, today: date | None = None) -> Non
     try:
         with _deadline(INIT_TIMEOUT_SEC, "epd.init()"):
             rc = epd.init()
-        # module_init() (wrapped by epd.init()) returns non-zero on failure
-        # per the vendored driver's own convention; -1 is its documented
-        # sentinel. Silently continuing would paint into an uninitialized
-        # panel and typically just surfaces as a confusing later failure.
-        if rc == -1:
+        if rc == -1:  # the vendored driver's failure sentinel
             raise DisplayInitError("epd.init() returned -1 (hardware init failed)")
         with _deadline(REFRESH_TIMEOUT_SEC, "e-paper refresh"):
             if _should_clear_today(today):
@@ -123,22 +98,14 @@ def show(black: Image.Image, red: Image.Image, today: date | None = None) -> Non
         error = exc
         raise
     finally:
-        # sleep() is the only call that drops the panel's drive voltage and
-        # releases SPI/GPIO (epdconfig.module_exit). Tri-color panels must
-        # not be left at high voltage, so it runs even when init/display
-        # failed or timed out — module_init() (called inside epd.init())
-        # opens SPI/GPIO before any BUSY-pin wait, so those resources are
-        # already claimed by the time init() could time out, and still need
-        # releasing. It gets its own bounded deadline too: sleep() doesn't
-        # poll BUSY, but a wedged SPI write shouldn't be able to hang the
-        # service either.
+        # Always sleep: it's the only call that drops the panel's drive
+        # voltage and releases SPI/GPIO, which init() claims before it can
+        # fail or time out.
         try:
             with _deadline(SLEEP_TIMEOUT_SEC, "epd.sleep()"):
                 epd.sleep()
         except Exception:
-            # If init()/display() already failed, sleep()'s own SPI traffic
-            # can fail too (e.g. an unopened bus) — don't let that secondary
-            # failure silently replace the original, more useful error.
+            # Don't let a secondary sleep() failure replace the original error.
             if error is None:
                 raise
             log.exception(

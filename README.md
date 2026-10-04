@@ -94,7 +94,7 @@ timer.
 
 ## Configuration
 
-`config.example.toml`:
+Annotated, with the same values as `config.example.toml`:
 
 ```toml
 [kid]
@@ -180,6 +180,7 @@ kidage/                       # package
   render.py                   # Pillow → (black plane, red plane)
   display.py                  # thin wrapper around the vendored driver
   special.py                  # birthday + milestone detection
+  solar.py                    # sunrise/sunset for after-hours inversion
   fonts/Fredoka.ttf           # SIL OFL variable font (shipped with the wheel)
   __main__.py                 # entrypoint: load → render → display | --preview
 vendor/waveshare_epd/         # vendored from waveshareteam/e-Paper
