@@ -20,7 +20,8 @@ dependencies = [
 
 [project.optional-dependencies]
 pi = [
-    "RPi.GPIO>=0.7",
+    "gpiozero>=2.0",
+    "lgpio>=0.2",
     "spidev>=3.6",
 ]
 dev = [
@@ -71,7 +72,7 @@ strict = true
 files = ["kidage"]
 
 # The vendored Waveshare driver is verbatim third-party code; don't typecheck it
-# or chase its untyped RPi.GPIO/spidev imports. kidage/display.py imports it
+# or chase its untyped gpiozero/lgpio/spidev imports. kidage/display.py imports it
 # lazily inside show().
 [[tool.mypy.overrides]]
 module = "vendor.*"
