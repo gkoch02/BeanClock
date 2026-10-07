@@ -12,6 +12,14 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
+# Checked before migrating: rsync --delete and the /opt/kidage cleanup would
+# both wipe a checkout living there, after the old service is already gone.
+case "$REPO_DIR/" in
+    "$INSTALL_DIR"/* | /opt/kidage/*)
+        echo "Clone the repo outside $INSTALL_DIR and /opt/kidage (e.g. ~/BeanClock) and rerun." >&2
+        exit 1 ;;
+esac
+
 # Pre-rename installs used "kidage" for the unit, user, and paths. Retire the
 # old units and carry config/state over so the device keeps its settings.
 if [[ -e /etc/systemd/system/kidage.timer || -d /opt/kidage ]]; then
@@ -50,13 +58,6 @@ if ! id beanclock >/dev/null 2>&1; then
     useradd --system --home "$INSTALL_DIR" --shell /usr/sbin/nologin \
             ${hw_groups:+--groups "$hw_groups"} beanclock
 fi
-
-# rsync --delete would wipe a checkout that lives inside the install dir.
-case "$REPO_DIR/" in
-    "$INSTALL_DIR"/*)
-        echo "Clone the repo outside $INSTALL_DIR (e.g. ~/BeanClock) and rerun." >&2
-        exit 1 ;;
-esac
 
 echo "==> Syncing source to $INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
