@@ -2,7 +2,7 @@
 
 NOAA's simplified solar-position equation, written out longhand to avoid
 adding a runtime dependency. Accurate to roughly a minute outside polar
-regions, which is well within the once-per-hour cadence of the kidage
+regions, which is well within the once-per-hour cadence of the beanclock
 refresh.
 """
 

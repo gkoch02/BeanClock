@@ -3,8 +3,8 @@ from datetime import UTC, datetime, timedelta, timezone
 import pytest
 from PIL import Image, ImageDraw
 
-from kidage.age import AgeBreakdown
-from kidage.render import (
+from beanclock.age import AgeBreakdown
+from beanclock.render import (
     FRAME_BEAD_INSET,
     FRAME_OUTER,
     FRAME_PAD,
@@ -319,7 +319,7 @@ def test_long_hero_would_overflow_at_default_size():
     path: '99 years  11 months' at 28pt Bold must exceed WIDTH-28. If the
     font ever changes to narrower glyphs and this stops being true, the
     budget test no longer proves shrink works — pick a longer input."""
-    from kidage.render import _text_width
+    from beanclock.render import _text_width
 
     bd = ImageDraw.Draw(Image.new("1", (WIDTH, HEIGHT), 1))
     f28 = _font(28, "Bold")
@@ -626,7 +626,7 @@ def test_long_name_header_shrinks_into_accent_budget():
     the frame-safe x range [14, WIDTH-15]."""
     long_name = "Bartholomew-James"
     bd = ImageDraw.Draw(Image.new("1", (WIDTH, HEIGHT), 1))
-    from kidage.render import HEADER_MAX_WIDTH, _text_width
+    from beanclock.render import HEADER_MAX_WIDTH, _text_width
 
     assert _text_width(bd, f"{long_name} is", _font(20, "Medium")) > HEADER_MAX_WIDTH, (
         "fixture name no longer exercises the shrink loop — pick a longer one"
@@ -648,7 +648,7 @@ def test_extreme_name_skips_header_accents():
     the frame and the text's left edge."""
     name = "Maximiliana Wilhelmina Jones"
     bd = ImageDraw.Draw(Image.new("1", (WIDTH, HEIGHT), 1))
-    from kidage.render import HEADER_MAX_WIDTH, _text_width
+    from beanclock.render import HEADER_MAX_WIDTH, _text_width
 
     hw = _text_width(bd, f"{name} is", _font(14, "Medium"))
     assert hw > HEADER_MAX_WIDTH, (

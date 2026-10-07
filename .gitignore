@@ -9,5 +9,5 @@ dist/
 htmlcov/
 coverage.xml
 
-# Local config (the installer copies config.example.toml to /etc/kidage/)
+# Local config (the installer copies config.example.toml to /etc/beanclock/)
 config.toml

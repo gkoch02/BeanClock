@@ -9,11 +9,11 @@
 
 - [ ] `pytest` passes
 - [ ] `ruff check .` and `mypy` pass
-- [ ] Rendered a preview (`python -m kidage --config config.example.toml
+- [ ] Rendered a preview (`python -m beanclock --config config.example.toml
       --preview /tmp/p.png`, plus `--now` / `--after-hours` / `--quiet` for
       the affected mode)
-- [ ] Exercised on the Pi (`sudo systemctl start kidage.service`,
-      `journalctl -u kidage.service`) — needed for `display.py`, the systemd
+- [ ] Exercised on the Pi (`sudo systemctl start beanclock.service`,
+      `journalctl -u beanclock.service`) — needed for `display.py`, the systemd
       units, or `scripts/install.sh`
 
 ## Layout changes
@@ -27,9 +27,9 @@
 ## Checklist
 
 - [ ] New config knobs are in `config.example.toml`, the dataclass, **and**
-      the `_reject_unknown` allow-lists in `kidage/config.py`
+      the `_reject_unknown` allow-lists in `beanclock/config.py`
 - [ ] `vendor/waveshare_epd/` is untouched (fixes belong in
-      `kidage/display.py`)
+      `beanclock/display.py`)
 - [ ] `README.md` updated if user-facing behavior changed
 - [ ] `CLAUDE.md` changed only if a rule that spans files was added,
       changed, or removed; rationale lives in the commit message, and code

@@ -3,14 +3,14 @@ Description=Update kid age display every hour during waking hours
 
 [Timer]
 # Fire hourly, all day. The script reads wake_hour/sleep_hour from
-# /etc/kidage/config.toml and exits early outside that window, so the TOML
+# /etc/beanclock/config.toml and exits early outside that window, so the TOML
 # file is the one place to edit the schedule (no timer reload needed).
 OnCalendar=*-*-* *:00:00
 # Persistent: run once after boot if a slot was missed; the missed
-# sleep_hour quiet catch-up in kidage/__main__.py depends on it.
+# sleep_hour quiet catch-up in beanclock/__main__.py depends on it.
 Persistent=true
 AccuracySec=1min
-Unit=kidage.service
+Unit=beanclock.service
 
 [Install]
 WantedBy=timers.target

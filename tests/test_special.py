@@ -2,8 +2,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from kidage.age import AgeBreakdown
-from kidage.special import _ordinal, detect
+from beanclock.age import AgeBreakdown
+from beanclock.special import _ordinal, detect
 
 PT = timezone(timedelta(hours=-7))
 BORN = datetime(2022, 9, 12, 3, 47, tzinfo=PT)

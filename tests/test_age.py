@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from kidage.age import AgeBreakdown, compute, pluralize
+from beanclock.age import AgeBreakdown, compute, pluralize
 
 PT = timezone(timedelta(hours=-7))
 PST = timezone(timedelta(hours=-8))

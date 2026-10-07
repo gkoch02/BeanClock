@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from kidage.config import load
+from beanclock.config import load
 
 
 def _write(tmp_path: Path, body: str) -> Path:
