@@ -13,13 +13,13 @@ from PIL import Image
 
 log = logging.getLogger(__name__)
 
-STATE_DIR = Path(os.environ.get("KIDAGE_STATE_DIR", "/var/lib/kidage"))
+STATE_DIR = Path(os.environ.get("BEANCLOCK_STATE_DIR", "/var/lib/beanclock"))
 LAST_CLEAR_FILE = STATE_DIR / "last-clear"
 LAST_QUIET_FILE = STATE_DIR / "last-quiet"
 
 # The vendored busy() spins on the BUSY pin with no timeout, so a stuck panel
 # would hang this oneshot and every later timer run. Keep TimeoutStartSec in
-# systemd/kidage.service above the sum of these.
+# systemd/beanclock.service above the sum of these.
 INIT_TIMEOUT_SEC = 30
 REFRESH_TIMEOUT_SEC = 60
 SLEEP_TIMEOUT_SEC = 10

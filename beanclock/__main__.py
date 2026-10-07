@@ -9,30 +9,30 @@ from importlib import metadata
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from kidage.age import compute
-from kidage.config import load
-from kidage.render import compose_preview, render
-from kidage.special import detect as detect_special
+from beanclock.age import compute
+from beanclock.config import load
+from beanclock.render import compose_preview, render
+from beanclock.special import detect as detect_special
 
-log = logging.getLogger("kidage")
+log = logging.getLogger("beanclock")
 
-# install.sh writes /opt/kidage/VERSION. The installer's non-editable install
+# install.sh writes /opt/beanclock/VERSION. The installer's non-editable install
 # puts __file__ in site-packages, so the relative path is the `pip install -e .`
 # fallback only.
 VERSION_FILE_CANDIDATES = [
-    Path("/opt/kidage/VERSION"),
+    Path("/opt/beanclock/VERSION"),
     Path(__file__).resolve().parent.parent / "VERSION",
 ]
 
 
 def _default_config_path() -> Path:
-    env = os.environ.get("KIDAGE_CONFIG")
+    env = os.environ.get("BEANCLOCK_CONFIG")
     if env:
         return Path(env)
     local = Path("config.toml")
     if local.exists():
         return local
-    return Path("/etc/kidage/config.toml")
+    return Path("/etc/beanclock/config.toml")
 
 
 def _deployed_revision() -> str | None:
@@ -45,11 +45,11 @@ def _deployed_revision() -> str | None:
 
 def _version_string() -> str:
     try:
-        pkg = metadata.version("kidage")
+        pkg = metadata.version("beanclock")
     except metadata.PackageNotFoundError:
         pkg = "unknown"
     rev = _deployed_revision()
-    return f"kidage {pkg} ({rev})" if rev else f"kidage {pkg}"
+    return f"beanclock {pkg} ({rev})" if rev else f"beanclock {pkg}"
 
 
 def _system_zone() -> ZoneInfo:
@@ -70,14 +70,14 @@ def _system_zone() -> ZoneInfo:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="kidage", description=__doc__)
+    parser = argparse.ArgumentParser(prog="beanclock", description=__doc__)
     parser.add_argument(
         "--config",
         type=Path,
         default=None,
         help=(
-            "Path to TOML config (env: KIDAGE_CONFIG; "
-            "default: ./config.toml or /etc/kidage/config.toml)."
+            "Path to TOML config (env: BEANCLOCK_CONFIG; "
+            "default: ./config.toml or /etc/beanclock/config.toml)."
         ),
     )
     parser.add_argument(
@@ -146,7 +146,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.now is None:
             # Pi was off at sleep_hour: paint the quiet layout once so the
             # panel doesn't freeze overnight on volatile metrics.
-            from kidage.display import quiet_refreshed_since
+            from beanclock.display import quiet_refreshed_since
             quiet_catchup_date = (
                 now.date()
                 if now.hour > cfg.sleep_hour
@@ -173,7 +173,7 @@ def main(argv: list[str] | None = None) -> int:
 
     after_hours = args.after_hours
     if not after_hours and cfg.after_hours_invert and args.now is None:
-        from kidage.solar import polar_night, sun_times
+        from beanclock.solar import polar_night, sun_times
         # config.load() requires lat/lon when after_hours_invert is set.
         assert cfg.latitude is not None
         assert cfg.longitude is not None
@@ -224,7 +224,7 @@ def main(argv: list[str] | None = None) -> int:
         log.info("wrote preview to %s", args.preview)
         return 0
 
-    from kidage.display import record_quiet, show
+    from beanclock.display import record_quiet, show
     show(black, red, today=now.date())
     if quiet and args.now is None:
         # Mark the sleep_hour this refresh covered, not necessarily today's,

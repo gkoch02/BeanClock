@@ -26,7 +26,7 @@ the age is spelled out. A spread:
   accents (heart / star / balloon / moon / sun / flower), no fussy clipart.
 - Hourly refresh during a configurable wake window (default 07:00–21:00 local
   time), driven by a `systemd` timer that fires every hour and a wake-window
-  check in the script itself — edit `/etc/kidage/config.toml` to change the
+  check in the script itself — edit `/etc/beanclock/config.toml` to change the
   hours, no timer reload needed.
 - Special-day takeovers: on the kid's birthday the hero row reads "Happy Nth
   Birthday!", and on configurable day-count milestones (default 100 / 500 /
@@ -79,17 +79,17 @@ git clone https://github.com/gkoch02/BeanClock.git
 cd BeanClock
 sudo timedatectl set-timezone America/Los_Angeles  # use your tz (zoneinfo, not an offset)
 sudo bash scripts/install.sh
-sudo $EDITOR /etc/kidage/config.toml         # set name + birth datetime
-sudo systemctl start kidage.service          # first refresh now
-systemctl list-timers kidage.timer           # confirm next hourly fire
+sudo $EDITOR /etc/beanclock/config.toml      # set name + birth datetime
+sudo systemctl start beanclock.service       # first refresh now
+systemctl list-timers beanclock.timer        # confirm next hourly fire
 ```
 
 `wake_hour` and `sleep_hour` are interpreted against the Pi's system
 timezone, so it must be a real zoneinfo (e.g. `America/Los_Angeles`) for
 the wake window to track DST correctly.
 
-The installer creates `kidage` system user, builds a virtualenv at
-`/opt/kidage/.venv`, copies the `systemd` units, enables SPI, and starts the
+The installer creates `beanclock` system user, builds a virtualenv at
+`/opt/beanclock/.venv`, copies the `systemd` units, enables SPI, and starts the
 timer.
 
 ## Configuration
@@ -148,7 +148,7 @@ preserved and its projection follows along — a Pacific-born kid on an
 Eastern Pi sees the day flip three hours later in local time, not at the
 old Pacific minute.
 
-Edit `/etc/kidage/config.toml` and run `sudo systemctl start kidage.service`
+Edit `/etc/beanclock/config.toml` and run `sudo systemctl start beanclock.service`
 to push the change to the panel immediately (the manual refresh still
 respects `wake_hour`/`sleep_hour`, so widen those first if you're testing
 outside waking hours). The next scheduled refresh will also pick up the
@@ -162,7 +162,7 @@ source .venv/bin/activate
 pip install -e '.[dev]'
 
 pytest                                       # full suite is hardware-free
-python -m kidage --config config.example.toml --preview /tmp/p.png
+python -m beanclock --config config.example.toml --preview /tmp/p.png
 xdg-open /tmp/p.png                          # eyeball the layout
 ```
 
@@ -174,7 +174,7 @@ both flags for deterministic screenshots of the night-mode layout.
 ## Repo layout
 
 ```
-kidage/                       # package
+beanclock/                    # package
   age.py                      # AgeBreakdown + dateutil-based compute()
   config.py                   # TOML loader + validation
   render.py                   # Pillow → (black plane, red plane)
@@ -184,14 +184,14 @@ kidage/                       # package
   fonts/Fredoka.ttf           # SIL OFL variable font (shipped with the wheel)
   __main__.py                 # entrypoint: load → render → display | --preview
 vendor/waveshare_epd/         # vendored from waveshareteam/e-Paper
-systemd/kidage.{service,timer}
+systemd/beanclock.{service,timer}
 scripts/install.sh            # idempotent installer
 tests/                        # pure-Python (no panel)
 ```
 
 ## Troubleshooting
 
-- **`journalctl -u kidage.service` shows `RuntimeError: Failed to add edge
+- **`journalctl -u beanclock.service` shows `RuntimeError: Failed to add edge
   detection`** — SPI is not enabled or the user is not in the `spi`/`gpio`
   groups. Re-run the installer.
 - **Display is upside down** — set `flip = true` in `config.toml`.
@@ -211,21 +211,21 @@ tests/                        # pure-Python (no panel)
   panel surfaces as `DisplayTimeoutError` instead. If it does appear, the
   vendored driver or its `epdconfig` differs from the one shipped here.
 - **Ghosting** — the daily clear at the first wake-hour fire wipes residual
-  burn-in. Force one with `sudo rm /var/lib/kidage/last-clear && sudo
-  systemctl start kidage.service`.
+  burn-in. Force one with `sudo rm /var/lib/beanclock/last-clear && sudo
+  systemctl start beanclock.service`.
 - **Wake window fires an hour late after a DST change** — the Pi's system
   timezone is set to a fixed offset (e.g. `Etc/GMT+7`) instead of a
   zoneinfo. Run `timedatectl status` to check, then
   `sudo timedatectl set-timezone America/Los_Angeles` (or your IANA zone)
   so the OS handles DST.
-- **What's running on this Pi?** — `kidage --version` prints the package
+- **What's running on this Pi?** — `beanclock --version` prints the package
   version plus the git revision recorded by `install.sh` (e.g.
-  `kidage 0.1.0 (v0.1.0-3-gabc1234-dirty)`). The installer writes this to
-  `/opt/kidage/VERSION` on every run, so re-running it after a `git pull`
+  `beanclock 0.1.0 (v0.1.0-3-gabc1234-dirty)`). The installer writes this to
+  `/opt/beanclock/VERSION` on every run, so re-running it after a `git pull`
   is enough to refresh the stamp.
 
 ## Licenses
 
 - Everything in this repository except the two items below — MIT (see `LICENSE`).
 - `vendor/waveshare_epd/` — MIT, © Waveshare.
-- `kidage/fonts/Fredoka.ttf` — SIL Open Font License 1.1, see `kidage/fonts/OFL.txt`.
+- `beanclock/fonts/Fredoka.ttf` — SIL Open Font License 1.1, see `beanclock/fonts/OFL.txt`.

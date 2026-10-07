@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from PIL import Image
 
-from kidage.__main__ import (
+from beanclock.__main__ import (
     VERSION_FILE_CANDIDATES,
     _default_config_path,
     _deployed_revision,
@@ -14,7 +14,7 @@ from kidage.__main__ import (
     _version_string,
     main,
 )
-from kidage.render import HEIGHT, WIDTH
+from beanclock.render import HEIGHT, WIDTH
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXAMPLE_CONFIG = REPO_ROOT / "config.example.toml"
@@ -63,21 +63,21 @@ def test_preview_is_deterministic_for_pinned_now(tmp_path):
 
 def test_default_config_path_prefers_env(monkeypatch, tmp_path):
     target = tmp_path / "from-env.toml"
-    monkeypatch.setenv("KIDAGE_CONFIG", str(target))
+    monkeypatch.setenv("BEANCLOCK_CONFIG", str(target))
     assert _default_config_path() == target
 
 
 def test_default_config_path_falls_back_to_local(monkeypatch, tmp_path):
-    monkeypatch.delenv("KIDAGE_CONFIG", raising=False)
+    monkeypatch.delenv("BEANCLOCK_CONFIG", raising=False)
     monkeypatch.chdir(tmp_path)
     (tmp_path / "config.toml").write_text("")
     assert _default_config_path() == Path("config.toml")
 
 
 def test_default_config_path_falls_back_to_etc(monkeypatch, tmp_path):
-    monkeypatch.delenv("KIDAGE_CONFIG", raising=False)
+    monkeypatch.delenv("BEANCLOCK_CONFIG", raising=False)
     monkeypatch.chdir(tmp_path)
-    assert _default_config_path() == Path("/etc/kidage/config.toml")
+    assert _default_config_path() == Path("/etc/beanclock/config.toml")
 
 
 def test_main_invokes_display_when_no_preview(tmp_path, monkeypatch):
@@ -89,9 +89,9 @@ def test_main_invokes_display_when_no_preview(tmp_path, monkeypatch):
         captured["red"] = red
         captured["today"] = today
 
-    import kidage.display
-    monkeypatch.setattr(kidage.display, "show", fake_show)
-    # __main__ does `from kidage.display import show` inside the function,
+    import beanclock.display
+    monkeypatch.setattr(beanclock.display, "show", fake_show)
+    # __main__ does `from beanclock.display import show` inside the function,
     # so patching the module attribute is enough.
 
     rc = main([
@@ -111,18 +111,18 @@ def _called_show(monkeypatch) -> list[tuple]:
     def fake_show(black, red, today=None):
         calls.append((black, red, today))
 
-    import kidage.display
-    monkeypatch.setattr(kidage.display, "show", fake_show)
+    import beanclock.display
+    monkeypatch.setattr(beanclock.display, "show", fake_show)
     return calls
 
 
 def _state_in_tmp(monkeypatch, tmp_path):
     """Point the display state files (last-clear / last-quiet) at tmp_path
-    so live-path tests never touch /var/lib/kidage."""
-    import kidage.display
-    monkeypatch.setattr(kidage.display, "STATE_DIR", tmp_path)
-    monkeypatch.setattr(kidage.display, "LAST_CLEAR_FILE", tmp_path / "last-clear")
-    monkeypatch.setattr(kidage.display, "LAST_QUIET_FILE", tmp_path / "last-quiet")
+    so live-path tests never touch /var/lib/beanclock."""
+    import beanclock.display
+    monkeypatch.setattr(beanclock.display, "STATE_DIR", tmp_path)
+    monkeypatch.setattr(beanclock.display, "LAST_CLEAR_FILE", tmp_path / "last-clear")
+    monkeypatch.setattr(beanclock.display, "LAST_QUIET_FILE", tmp_path / "last-quiet")
 
 
 def test_main_skips_display_before_wake_hour(monkeypatch):
@@ -180,7 +180,7 @@ def test_system_zone_reads_localtime_symlink(tmp_path, monkeypatch):
         if arg == "/etc/timezone":
             return tmp_path / "missing-timezone"
         return real_path(arg)
-    monkeypatch.setattr("kidage.__main__.Path", fake_path)
+    monkeypatch.setattr("beanclock.__main__.Path", fake_path)
 
     zone = _system_zone()
     assert isinstance(zone, ZoneInfo)
@@ -197,7 +197,7 @@ def test_system_zone_falls_back_to_utc_when_nothing_configured(tmp_path, monkeyp
         if arg == "/etc/timezone":
             return tmp_path / "missing-timezone"
         return real_path(arg)
-    monkeypatch.setattr("kidage.__main__.Path", fake_path)
+    monkeypatch.setattr("beanclock.__main__.Path", fake_path)
 
     zone = _system_zone()
     assert isinstance(zone, ZoneInfo)
@@ -217,7 +217,7 @@ def test_system_zone_falls_back_to_etc_timezone(tmp_path, monkeypatch):
         if arg == "/etc/timezone":
             return fake_timezone
         return real_path(arg)
-    monkeypatch.setattr("kidage.__main__.Path", fake_path)
+    monkeypatch.setattr("beanclock.__main__.Path", fake_path)
 
     zone = _system_zone()
     assert isinstance(zone, ZoneInfo)
@@ -252,7 +252,7 @@ def test_live_now_carries_dst_aware_zoneinfo(tmp_path, monkeypatch):
         if arg == "/etc/timezone":
             return tmp_path / "missing"
         return real_path(arg)
-    monkeypatch.setattr("kidage.__main__.Path", fake_path)
+    monkeypatch.setattr("beanclock.__main__.Path", fake_path)
 
     # Pin datetime.now to a summer anniversary moment in PDT.
     from datetime import datetime as _dt
@@ -261,18 +261,18 @@ def test_live_now_carries_dst_aware_zoneinfo(tmp_path, monkeypatch):
         @classmethod
         def now(cls, tz=None):
             return _dt(2026, 4, 9, 13, 54, tzinfo=tz)
-    monkeypatch.setattr("kidage.__main__.datetime", FakeDateTime)
+    monkeypatch.setattr("beanclock.__main__.datetime", FakeDateTime)
 
     captured = {}
-    real_compute = __import__("kidage.age", fromlist=["compute"]).compute
+    real_compute = __import__("beanclock.age", fromlist=["compute"]).compute
     def fake_compute(born_at, now):
         captured["now"] = now
         return real_compute(born_at, now)
-    monkeypatch.setattr("kidage.__main__.compute", fake_compute)
+    monkeypatch.setattr("beanclock.__main__.compute", fake_compute)
 
     # Patch display.show so the live path doesn't try to touch hardware.
-    import kidage.display
-    monkeypatch.setattr(kidage.display, "show", lambda *_, **__: None)
+    import beanclock.display
+    monkeypatch.setattr(beanclock.display, "show", lambda *_, **__: None)
 
     rc = main(["--config", str(cfg)])
     assert rc == 0
@@ -280,14 +280,14 @@ def test_live_now_carries_dst_aware_zoneinfo(tmp_path, monkeypatch):
     assert isinstance(now.tzinfo, ZoneInfo)
     assert str(now.tzinfo) == "America/Los_Angeles"
 
-    from kidage.age import compute
+    from beanclock.age import compute
     age = compute(_dt.fromisoformat("2024-03-09T13:54:00-08:00"), now)
     assert (age.years, age.months, age.days, age.hours) == (2, 1, 0, 0)
 
 
 def test_deployed_revision_returns_none_when_no_candidate_exists(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        "kidage.__main__.VERSION_FILE_CANDIDATES", [tmp_path / "missing"]
+        "beanclock.__main__.VERSION_FILE_CANDIDATES", [tmp_path / "missing"]
     )
     assert _deployed_revision() is None
 
@@ -297,7 +297,7 @@ def test_deployed_revision_reads_first_existing_candidate(tmp_path, monkeypatch)
     fallback = tmp_path / "fallback"
     fallback.write_text("from-fallback\n")
     monkeypatch.setattr(
-        "kidage.__main__.VERSION_FILE_CANDIDATES", [primary, fallback]
+        "beanclock.__main__.VERSION_FILE_CANDIDATES", [primary, fallback]
     )
     assert _deployed_revision() == "from-fallback"
     primary.write_text("from-primary\n")
@@ -307,46 +307,46 @@ def test_deployed_revision_reads_first_existing_candidate(tmp_path, monkeypatch)
 def test_deployed_revision_treats_empty_file_as_missing(tmp_path, monkeypatch):
     f = tmp_path / "VERSION"
     f.write_text("   \n")
-    monkeypatch.setattr("kidage.__main__.VERSION_FILE_CANDIDATES", [f])
+    monkeypatch.setattr("beanclock.__main__.VERSION_FILE_CANDIDATES", [f])
     assert _deployed_revision() is None
 
 
 def test_version_string_includes_package_version_without_revision(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        "kidage.__main__.VERSION_FILE_CANDIDATES", [tmp_path / "missing"]
+        "beanclock.__main__.VERSION_FILE_CANDIDATES", [tmp_path / "missing"]
     )
     s = _version_string()
-    assert s.startswith("kidage ")
+    assert s.startswith("beanclock ")
     assert "(" not in s
 
 
 def test_version_string_includes_revision_when_present(tmp_path, monkeypatch):
     f = tmp_path / "VERSION"
     f.write_text("v0.1.0-3-gabc1234-dirty\n")
-    monkeypatch.setattr("kidage.__main__.VERSION_FILE_CANDIDATES", [f])
+    monkeypatch.setattr("beanclock.__main__.VERSION_FILE_CANDIDATES", [f])
     s = _version_string()
     assert "v0.1.0-3-gabc1234-dirty" in s
-    assert s.startswith("kidage ")
+    assert s.startswith("beanclock ")
 
 
 def test_version_flag_prints_and_exits_zero(tmp_path, monkeypatch, capsys):
     f = tmp_path / "VERSION"
     f.write_text("v0.1.0-3-gabc1234-dirty\n")
-    monkeypatch.setattr("kidage.__main__.VERSION_FILE_CANDIDATES", [f])
+    monkeypatch.setattr("beanclock.__main__.VERSION_FILE_CANDIDATES", [f])
     with pytest.raises(SystemExit) as excinfo:
         main(["--version"])
     assert excinfo.value.code == 0
     out = capsys.readouterr().out
-    assert "kidage" in out
+    assert "beanclock" in out
     assert "v0.1.0-3-gabc1234-dirty" in out
 
 
 def test_version_candidates_include_install_dir_path():
-    # Regression guard: install.sh writes /opt/kidage/VERSION, but a
-    # non-editable `pip install` puts kidage/__main__.py under
+    # Regression guard: install.sh writes /opt/beanclock/VERSION, but a
+    # non-editable `pip install` puts beanclock/__main__.py under
     # .venv/lib/.../site-packages, so a __file__-relative path alone won't
     # find it. The deployed install dir must stay in the candidate list.
-    assert Path("/opt/kidage/VERSION") in VERSION_FILE_CANDIDATES
+    assert Path("/opt/beanclock/VERSION") in VERSION_FILE_CANDIDATES
 
 
 def test_preview_ignores_wake_window(tmp_path, monkeypatch):
@@ -399,13 +399,13 @@ def test_after_hours_preview_via_cli_flag_inverts(tmp_path, monkeypatch):
 
 def _capture_render(monkeypatch) -> dict:
     """Wrap render() so a test can read the kwargs main() passed it."""
-    import kidage.render
+    import beanclock.render
     captured: dict = {}
 
     def fake_render(*args, **kwargs):
         captured.update(kwargs)
-        return kidage.render.render(*args, **kwargs)
-    monkeypatch.setattr("kidage.__main__.render", fake_render)
+        return beanclock.render.render(*args, **kwargs)
+    monkeypatch.setattr("beanclock.__main__.render", fake_render)
     return captured
 
 
@@ -417,7 +417,7 @@ def _freeze_now(monkeypatch, frozen):
         @classmethod
         def now(cls, tz=None):
             return frozen.replace(tzinfo=tz)
-    monkeypatch.setattr("kidage.__main__.datetime", FrozenDateTime)
+    monkeypatch.setattr("beanclock.__main__.datetime", FrozenDateTime)
 
 
 @pytest.mark.parametrize(
@@ -441,10 +441,10 @@ def test_live_after_hours_tracks_sunset_with_30min_lookahead(
     fake_sunrise = _dt(2026, 5, 16, 12, 45, tzinfo=UTC)  # 05:45 PDT
     fake_sunset = _dt(2026, 5, 17, 3, 8, tzinfo=UTC)     # 20:08 PDT
     monkeypatch.setattr(
-        "kidage.solar.sun_times",
+        "beanclock.solar.sun_times",
         lambda d, lat, lon: (fake_sunrise, fake_sunset),
     )
-    monkeypatch.setattr("kidage.__main__._system_zone", lambda: _tz(_td(hours=-7)))
+    monkeypatch.setattr("beanclock.__main__._system_zone", lambda: _tz(_td(hours=-7)))
     _freeze_now(monkeypatch, _dt(2026, 5, 16, hour, minute))
     captured = _capture_render(monkeypatch)
     _called_show(monkeypatch)
@@ -487,7 +487,7 @@ def test_live_quiet_triggers_at_sleep_hour(tmp_path, monkeypatch):
         '[schedule]\nwake_hour = 7\nsleep_hour = 21\n'
         '[display]\nformat = "full"\n'
     )
-    monkeypatch.setattr("kidage.__main__._system_zone", lambda: _tz(_td(hours=-7)))
+    monkeypatch.setattr("beanclock.__main__._system_zone", lambda: _tz(_td(hours=-7)))
     _freeze_now(monkeypatch, _dt(2026, 4, 27, 21, 0))
     captured = _capture_render(monkeypatch)
     _called_show(monkeypatch)
@@ -514,20 +514,20 @@ def test_live_quiet_does_not_trigger_before_sleep_hour(tmp_path, monkeypatch):
     from datetime import timedelta as _td
     from datetime import timezone as _tz
     PT = _tz(_td(hours=-7))
-    monkeypatch.setattr("kidage.__main__._system_zone", lambda: PT)
+    monkeypatch.setattr("beanclock.__main__._system_zone", lambda: PT)
 
     captured = {}
-    real_render = __import__("kidage.render", fromlist=["render"]).render
+    real_render = __import__("beanclock.render", fromlist=["render"]).render
     def fake_render(*args, **kwargs):
         captured["quiet"] = kwargs.get("quiet", False)
         return real_render(*args, **kwargs)
-    monkeypatch.setattr("kidage.__main__.render", fake_render)
+    monkeypatch.setattr("beanclock.__main__.render", fake_render)
 
     class JustBeforeSleep(_dt):
         @classmethod
         def now(cls, tz=None):
             return _dt(2026, 4, 27, 20, 0, tzinfo=tz)
-    monkeypatch.setattr("kidage.__main__.datetime", JustBeforeSleep)
+    monkeypatch.setattr("beanclock.__main__.datetime", JustBeforeSleep)
     _called_show(monkeypatch)
     assert main(["--config", str(cfg)]) == 0
     assert captured["quiet"] is False
@@ -546,13 +546,13 @@ def test_main_passes_special_string_to_render_on_birthday(tmp_path, monkeypatch)
         '[schedule]\nwake_hour = 7\nsleep_hour = 21\n'
     )
     captured = {}
-    real_render = __import__("kidage.render", fromlist=["render"]).render
+    real_render = __import__("beanclock.render", fromlist=["render"]).render
 
     def fake_render(*args, **kwargs):
         captured["special"] = kwargs.get("special")
         return real_render(*args, **kwargs)
 
-    monkeypatch.setattr("kidage.__main__.render", fake_render)
+    monkeypatch.setattr("beanclock.__main__.render", fake_render)
     rc = main([
         "--config", str(cfg),
         "--preview", str(tmp_path / "out.png"),
@@ -567,13 +567,13 @@ def test_main_no_special_passes_none_to_render(tmp_path, monkeypatch):
     an empty string. The render() branch is `if special is not None:`, so
     an empty string would still take the special-day code path."""
     captured = {}
-    real_render = __import__("kidage.render", fromlist=["render"]).render
+    real_render = __import__("beanclock.render", fromlist=["render"]).render
 
     def fake_render(*args, **kwargs):
         captured["special"] = kwargs.get("special")
         return real_render(*args, **kwargs)
 
-    monkeypatch.setattr("kidage.__main__.render", fake_render)
+    monkeypatch.setattr("beanclock.__main__.render", fake_render)
     rc = main([
         "--config", str(EXAMPLE_CONFIG),
         "--preview", str(tmp_path / "out.png"),
@@ -595,28 +595,28 @@ def test_live_polar_sun_times_none_consults_polar_night(
     from datetime import timedelta as _td
     from datetime import timezone as _tz
 
-    monkeypatch.setattr("kidage.solar.sun_times", lambda d, lat, lon: None)
+    monkeypatch.setattr("beanclock.solar.sun_times", lambda d, lat, lon: None)
     monkeypatch.setattr(
-        "kidage.solar.polar_night", lambda d, lat, lon: is_polar_night
+        "beanclock.solar.polar_night", lambda d, lat, lon: is_polar_night
     )
     PT = _tz(_td(hours=-7))
-    monkeypatch.setattr("kidage.__main__._system_zone", lambda: PT)
+    monkeypatch.setattr("beanclock.__main__._system_zone", lambda: PT)
 
     captured = {}
-    real_render = __import__("kidage.render", fromlist=["render"]).render
+    real_render = __import__("beanclock.render", fromlist=["render"]).render
 
     def fake_render(*args, **kwargs):
         captured["after_hours"] = kwargs.get("after_hours", False)
         return real_render(*args, **kwargs)
 
-    monkeypatch.setattr("kidage.__main__.render", fake_render)
+    monkeypatch.setattr("beanclock.__main__.render", fake_render)
 
     class Evening(_dt):
         @classmethod
         def now(cls, tz=None):
             return _dt(2026, 6, 21, 20, 0, tzinfo=tz)
 
-    monkeypatch.setattr("kidage.__main__.datetime", Evening)
+    monkeypatch.setattr("beanclock.__main__.datetime", Evening)
     _called_show(monkeypatch)
     rc = main(["--config", str(cfg)])
     assert rc == 0
@@ -633,7 +633,7 @@ def test_verbose_flag_enables_debug_logging(tmp_path, monkeypatch):
     def fake_basic_config(**kwargs):
         captured["level"] = kwargs.get("level")
 
-    monkeypatch.setattr("kidage.__main__.logging.basicConfig", fake_basic_config)
+    monkeypatch.setattr("beanclock.__main__.logging.basicConfig", fake_basic_config)
     _called_show(monkeypatch)
 
     rc = main([
@@ -654,7 +654,7 @@ def test_default_logging_is_info(tmp_path, monkeypatch):
     def fake_basic_config(**kwargs):
         captured["level"] = kwargs.get("level")
 
-    monkeypatch.setattr("kidage.__main__.logging.basicConfig", fake_basic_config)
+    monkeypatch.setattr("beanclock.__main__.logging.basicConfig", fake_basic_config)
     _called_show(monkeypatch)
 
     rc = main([
@@ -681,7 +681,7 @@ def test_system_zone_falls_back_when_localtime_is_a_regular_file(tmp_path, monke
         if arg == "/etc/timezone":
             return tmp_path / "missing-timezone"
         return real_path(arg)
-    monkeypatch.setattr("kidage.__main__.Path", fake_path)
+    monkeypatch.setattr("beanclock.__main__.Path", fake_path)
 
     zone = _system_zone()
     assert isinstance(zone, ZoneInfo)
@@ -689,7 +689,7 @@ def test_system_zone_falls_back_when_localtime_is_a_regular_file(tmp_path, monke
 
 
 def test_version_string_when_package_metadata_missing(tmp_path, monkeypatch):
-    """If kidage isn't actually installed (running straight out of the source
+    """If beanclock isn't actually installed (running straight out of the source
     tree without `pip install -e .`), metadata.version raises
     PackageNotFoundError — the version string falls back to 'unknown'."""
     from importlib import metadata
@@ -697,12 +697,12 @@ def test_version_string_when_package_metadata_missing(tmp_path, monkeypatch):
     def boom(name):
         raise metadata.PackageNotFoundError(name)
 
-    monkeypatch.setattr("kidage.__main__.metadata.version", boom)
+    monkeypatch.setattr("beanclock.__main__.metadata.version", boom)
     monkeypatch.setattr(
-        "kidage.__main__.VERSION_FILE_CANDIDATES", [tmp_path / "missing"]
+        "beanclock.__main__.VERSION_FILE_CANDIDATES", [tmp_path / "missing"]
     )
     s = _version_string()
-    assert s == "kidage unknown"
+    assert s == "beanclock unknown"
 
 
 def test_live_after_hours_disabled_never_inverts(tmp_path, monkeypatch):
@@ -727,13 +727,13 @@ def test_live_after_hours_disabled_never_inverts(tmp_path, monkeypatch):
         @classmethod
         def now(cls, tz=None):
             return _dt(2026, 4, 27, 20, 30, tzinfo=tz)  # past sunset
-    monkeypatch.setattr("kidage.__main__.datetime", FakeDateTime)
-    monkeypatch.setattr("kidage.__main__._system_zone", lambda: PT)
+    monkeypatch.setattr("beanclock.__main__.datetime", FakeDateTime)
+    monkeypatch.setattr("beanclock.__main__._system_zone", lambda: PT)
 
     # If after_hours_invert is off, sun_times must not be called.
     def boom(*args, **kwargs):
         raise AssertionError("sun_times called when after-hours is off")
-    monkeypatch.setattr("kidage.solar.sun_times", boom)
+    monkeypatch.setattr("beanclock.solar.sun_times", boom)
 
     calls = _called_show(monkeypatch)
     rc = main(["--config", str(cfg)])
@@ -778,19 +778,19 @@ def test_live_after_hours_inverts_before_sunrise(tmp_path, monkeypatch):
     fake_sunrise = _dt(2026, 12, 21, 14, 45, tzinfo=UTC)
     fake_sunset = _dt(2026, 12, 22, 2, 30, tzinfo=UTC)
     monkeypatch.setattr(
-        "kidage.solar.sun_times", lambda d, lat, lon: (fake_sunrise, fake_sunset)
+        "beanclock.solar.sun_times", lambda d, lat, lon: (fake_sunrise, fake_sunset)
     )
     PT = _tz(_td(hours=-7))
-    monkeypatch.setattr("kidage.__main__._system_zone", lambda: PT)
+    monkeypatch.setattr("beanclock.__main__._system_zone", lambda: PT)
 
     captured = {}
-    real_render = __import__("kidage.render", fromlist=["render"]).render
+    real_render = __import__("beanclock.render", fromlist=["render"]).render
 
     def fake_render(*args, **kwargs):
         captured["after_hours"] = kwargs.get("after_hours", False)
         return real_render(*args, **kwargs)
 
-    monkeypatch.setattr("kidage.__main__.render", fake_render)
+    monkeypatch.setattr("beanclock.__main__.render", fake_render)
 
     # 07:00 + 30min look-ahead = 07:30, still before the 07:45 sunrise.
     class PreDawn(_dt):
@@ -798,7 +798,7 @@ def test_live_after_hours_inverts_before_sunrise(tmp_path, monkeypatch):
         def now(cls, tz=None):
             return _dt(2026, 12, 21, 7, 0, tzinfo=tz)
 
-    monkeypatch.setattr("kidage.__main__.datetime", PreDawn)
+    monkeypatch.setattr("beanclock.__main__.datetime", PreDawn)
     _called_show(monkeypatch)
     assert main(["--config", str(cfg)]) == 0
     assert captured["after_hours"] is True
@@ -809,7 +809,7 @@ def test_live_after_hours_inverts_before_sunrise(tmp_path, monkeypatch):
         def now(cls, tz=None):
             return _dt(2026, 12, 21, 8, 0, tzinfo=tz)
 
-    monkeypatch.setattr("kidage.__main__.datetime", AfterSunrise)
+    monkeypatch.setattr("beanclock.__main__.datetime", AfterSunrise)
     _called_show(monkeypatch)
     assert main(["--config", str(cfg)]) == 0
     assert captured["after_hours"] is False
@@ -838,24 +838,24 @@ def test_missed_sleep_hour_catchup_paints_quiet_once(tmp_path, monkeypatch):
     from datetime import timezone as _tz
 
     PT = _tz(_td(hours=-7))
-    monkeypatch.setattr("kidage.__main__._system_zone", lambda: PT)
+    monkeypatch.setattr("beanclock.__main__._system_zone", lambda: PT)
     _state_in_tmp(monkeypatch, tmp_path)
 
     captured = {}
-    real_render = __import__("kidage.render", fromlist=["render"]).render
+    real_render = __import__("beanclock.render", fromlist=["render"]).render
 
     def fake_render(*args, **kwargs):
         captured["quiet"] = kwargs.get("quiet", False)
         return real_render(*args, **kwargs)
 
-    monkeypatch.setattr("kidage.__main__.render", fake_render)
+    monkeypatch.setattr("beanclock.__main__.render", fake_render)
 
     class LateBoot(_dt):
         @classmethod
         def now(cls, tz=None):
             return _dt(2026, 4, 27, 22, 30, tzinfo=tz)
 
-    monkeypatch.setattr("kidage.__main__.datetime", LateBoot)
+    monkeypatch.setattr("beanclock.__main__.datetime", LateBoot)
     calls = _called_show(monkeypatch)
     assert main(["--config", str(cfg)]) == 0
     assert len(calls) == 1, "catch-up run must refresh the panel"
@@ -868,7 +868,7 @@ def test_missed_sleep_hour_catchup_paints_quiet_once(tmp_path, monkeypatch):
         def now(cls, tz=None):
             return _dt(2026, 4, 27, 23, 0, tzinfo=tz)
 
-    monkeypatch.setattr("kidage.__main__.datetime", NextHour)
+    monkeypatch.setattr("beanclock.__main__.datetime", NextHour)
     later_calls = _called_show(monkeypatch)
     assert main(["--config", str(cfg)]) == 0
     assert later_calls == []
@@ -884,7 +884,7 @@ def test_no_catchup_when_sleep_hour_refresh_happened(tmp_path, monkeypatch):
     from datetime import timezone as _tz
 
     PT = _tz(_td(hours=-7))
-    monkeypatch.setattr("kidage.__main__._system_zone", lambda: PT)
+    monkeypatch.setattr("beanclock.__main__._system_zone", lambda: PT)
     _state_in_tmp(monkeypatch, tmp_path)
     (tmp_path / "last-quiet").write_text("2026-04-27")
 
@@ -893,7 +893,7 @@ def test_no_catchup_when_sleep_hour_refresh_happened(tmp_path, monkeypatch):
         def now(cls, tz=None):
             return _dt(2026, 4, 27, 22, 30, tzinfo=tz)
 
-    monkeypatch.setattr("kidage.__main__.datetime", Evening)
+    monkeypatch.setattr("beanclock.__main__.datetime", Evening)
     calls = _called_show(monkeypatch)
     assert main(["--config", str(cfg)]) == 0
     assert calls == []
@@ -909,7 +909,7 @@ def test_small_hours_catchup_uses_yesterday_cutoff(tmp_path, monkeypatch):
     from datetime import timezone as _tz
 
     PT = _tz(_td(hours=-7))
-    monkeypatch.setattr("kidage.__main__._system_zone", lambda: PT)
+    monkeypatch.setattr("beanclock.__main__._system_zone", lambda: PT)
     _state_in_tmp(monkeypatch, tmp_path)
 
     class SmallHours(_dt):
@@ -917,7 +917,7 @@ def test_small_hours_catchup_uses_yesterday_cutoff(tmp_path, monkeypatch):
         def now(cls, tz=None):
             return _dt(2026, 4, 27, 2, 0, tzinfo=tz)
 
-    monkeypatch.setattr("kidage.__main__.datetime", SmallHours)
+    monkeypatch.setattr("beanclock.__main__.datetime", SmallHours)
 
     (tmp_path / "last-quiet").write_text("2026-04-26")  # yesterday — covered
     calls = _called_show(monkeypatch)
@@ -948,7 +948,7 @@ def test_small_hours_catchup_then_missed_next_sleep_hour_both_catch_up(
     from datetime import timezone as _tz
 
     PT = _tz(_td(hours=-7))
-    monkeypatch.setattr("kidage.__main__._system_zone", lambda: PT)
+    monkeypatch.setattr("beanclock.__main__._system_zone", lambda: PT)
     _state_in_tmp(monkeypatch, tmp_path)
 
     # 1. Day N (04-26) 21:00 sleep_hour is missed entirely (Pi off — no
@@ -958,7 +958,7 @@ def test_small_hours_catchup_then_missed_next_sleep_hour_both_catch_up(
         def now(cls, tz=None):
             return _dt(2026, 4, 27, 2, 0, tzinfo=tz)
 
-    monkeypatch.setattr("kidage.__main__.datetime", SmallHoursCatchup)
+    monkeypatch.setattr("beanclock.__main__.datetime", SmallHoursCatchup)
     calls = _called_show(monkeypatch)
     assert main(["--config", str(cfg)]) == 0
     assert len(calls) == 1, "first catch-up must paint"
@@ -970,7 +970,7 @@ def test_small_hours_catchup_then_missed_next_sleep_hour_both_catch_up(
         def now(cls, tz=None):
             return _dt(2026, 4, 27, 12, 0, tzinfo=tz)
 
-    monkeypatch.setattr("kidage.__main__.datetime", Daytime)
+    monkeypatch.setattr("beanclock.__main__.datetime", Daytime)
     daytime_calls = _called_show(monkeypatch)
     assert main(["--config", str(cfg)]) == 0
     assert len(daytime_calls) == 1
@@ -984,7 +984,7 @@ def test_small_hours_catchup_then_missed_next_sleep_hour_both_catch_up(
         def now(cls, tz=None):
             return _dt(2026, 4, 27, 22, 30, tzinfo=tz)
 
-    monkeypatch.setattr("kidage.__main__.datetime", LateBootSameNight)
+    monkeypatch.setattr("beanclock.__main__.datetime", LateBootSameNight)
     second_calls = _called_show(monkeypatch)
     assert main(["--config", str(cfg)]) == 0
     assert len(second_calls) == 1, "second same-night catch-up must paint"
@@ -1002,13 +1002,13 @@ def test_render_receives_zone_projected_born_at(tmp_path, monkeypatch):
         'born_at = 2022-09-12T23:47:00-07:00\n'
     )
     captured = {}
-    real_render = __import__("kidage.render", fromlist=["render"]).render
+    real_render = __import__("beanclock.render", fromlist=["render"]).render
 
     def fake_render(*args, **kwargs):
         captured["born"] = args[2]
         return real_render(*args, **kwargs)
 
-    monkeypatch.setattr("kidage.__main__.render", fake_render)
+    monkeypatch.setattr("beanclock.__main__.render", fake_render)
     rc = main([
         "--config", str(cfg),
         "--preview", str(tmp_path / "out.png"),

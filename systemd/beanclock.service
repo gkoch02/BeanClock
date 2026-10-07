@@ -3,26 +3,26 @@ Description=Render and push kid age to e-paper
 
 [Service]
 Type=oneshot
-Environment=KIDAGE_CONFIG=/etc/kidage/config.toml
-Environment=KIDAGE_STATE_DIR=/var/lib/kidage
+Environment=BEANCLOCK_CONFIG=/etc/beanclock/config.toml
+Environment=BEANCLOCK_STATE_DIR=/var/lib/beanclock
 # gpiozero's preferred lgpio backend creates its notification pipe in the
-# process working directory.  ProtectSystem=strict makes /opt/kidage
+# process working directory.  ProtectSystem=strict makes /opt/beanclock
 # read-only, while StateDirectory guarantees this directory is writable.
-WorkingDirectory=/var/lib/kidage
-ExecStart=/opt/kidage/.venv/bin/python -m kidage
-# Defense in depth on top of kidage/display.py's own SIGALRM-based bounds
+WorkingDirectory=/var/lib/beanclock
+ExecStart=/opt/beanclock/.venv/bin/python -m beanclock
+# Defense in depth on top of beanclock/display.py's own SIGALRM-based bounds
 # around each EPD hardware call (init/refresh/sleep sum to 100s at most). A
 # stuck BUSY pin should fail loudly well before this and never reach here,
 # but this stops the oneshot from hanging the hourly timer indefinitely if
 # it ever does (e.g. a hang outside the guarded hardware calls).
 TimeoutStartSec=150
-User=kidage
+User=beanclock
 SupplementaryGroups=spi gpio
-StateDirectory=kidage
+StateDirectory=beanclock
 StandardOutput=journal
 StandardError=journal
-# Hardening. The service only needs to read /opt/kidage + /etc/kidage, write
-# /var/lib/kidage (granted through StateDirectory), and open the SPI/GPIO
+# Hardening. The service only needs to read /opt/beanclock + /etc/beanclock, write
+# /var/lib/beanclock (granted through StateDirectory), and open the SPI/GPIO
 # device nodes — so the rest of the filesystem stays read-only or hidden.
 # Don't add PrivateDevices: it would mask /dev/spidev* and /dev/gpiomem.
 NoNewPrivileges=true

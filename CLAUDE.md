@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 A Raspberry Pi Zero 2 W appliance that renders a kid's age onto a Waveshare
-2.13" b/w/r e-paper (V4, 250×122). A `systemd` timer runs `python -m kidage`
+2.13" b/w/r e-paper (V4, 250×122). A `systemd` timer runs `python -m beanclock`
 hourly; each run is a oneshot that loads the TOML config, computes the age,
 paints two PIL bitmaps, pushes them to the panel, sleeps the panel, and exits.
 There is no daemon.
@@ -20,11 +20,11 @@ hardware-free and fully tested; `display.py` holds all hardware access.
 pip install -e '.[dev]'
 pytest                       # whole suite is hardware-free
 ruff check . && python -m mypy   # CI runs both
-python -m kidage --config config.example.toml --preview /tmp/p.png \
+python -m beanclock --config config.example.toml --preview /tmp/p.png \
     --now 2026-04-27T07:47:00-07:00   # add --after-hours / --quiet to force those layouts
 # On the Pi:
 sudo bash scripts/install.sh
-sudo systemctl start kidage.service && journalctl -u kidage.service -f
+sudo systemctl start beanclock.service && journalctl -u beanclock.service -f
 ```
 
 ## Rules
@@ -40,7 +40,7 @@ sudo systemctl start kidage.service && journalctl -u kidage.service -f
   timed-out `init()`, and its own failure must not replace the original
   error.
 - **Timeout budgets.** If you change `INIT_/REFRESH_/SLEEP_TIMEOUT_SEC` in
-  `display.py`, keep `TimeoutStartSec` in `systemd/kidage.service` above
+  `display.py`, keep `TimeoutStartSec` in `systemd/beanclock.service` above
   their sum.
 - **Fonts.** Always go through `render._font(size, weight)`; constructing
   `ImageFont.truetype` directly makes measurements disagree with output.
@@ -60,14 +60,14 @@ sudo systemctl start kidage.service && journalctl -u kidage.service -f
 - **Wake window lives in config**, not the timer: `__main__` exits early
   outside `[wake_hour, sleep_hour]`. `--preview` bypasses it, and `--now`
   previews never auto-invert or go quiet.
-- **State files** live in `KIDAGE_STATE_DIR` (default `/var/lib/kidage`):
+- **State files** live in `BEANCLOCK_STATE_DIR` (default `/var/lib/beanclock`):
   `last-clear` (once-a-day `epd.Clear()`; delete to force one) and
   `last-quiet` (missed-sleep_hour catch-up).
-- **`VERSION_FILE_CANDIDATES` order matters**: `/opt/kidage/VERSION` first,
+- **`VERSION_FILE_CANDIDATES` order matters**: `/opt/beanclock/VERSION` first,
   because the installer does a non-editable install. `tests/test_main.py`
   pins this.
 - **Vendored code.** Never edit `vendor/waveshare_epd/`; wrap fixes in
-  `kidage/display.py`.
+  `beanclock/display.py`.
 
 ## Tests
 

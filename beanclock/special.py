@@ -4,7 +4,7 @@ import calendar
 from collections.abc import Sequence
 from datetime import datetime
 
-from kidage.age import AgeBreakdown, pluralize
+from beanclock.age import AgeBreakdown, pluralize
 
 _ORDINAL_SUFFIXES = {1: "st", 2: "nd", 3: "rd"}
 

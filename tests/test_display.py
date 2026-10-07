@@ -10,12 +10,12 @@ from PIL import Image
 
 @pytest.fixture
 def display(monkeypatch, tmp_path):
-    """Reload kidage.display with KIDAGE_STATE_DIR pointed at tmp_path."""
-    monkeypatch.setenv("KIDAGE_STATE_DIR", str(tmp_path))
-    sys.modules.pop("kidage.display", None)
-    mod = importlib.import_module("kidage.display")
+    """Reload beanclock.display with BEANCLOCK_STATE_DIR pointed at tmp_path."""
+    monkeypatch.setenv("BEANCLOCK_STATE_DIR", str(tmp_path))
+    sys.modules.pop("beanclock.display", None)
+    mod = importlib.import_module("beanclock.display")
     yield mod
-    sys.modules.pop("kidage.display", None)
+    sys.modules.pop("beanclock.display", None)
 
 
 def test_should_clear_when_state_missing(display, tmp_path):
@@ -136,7 +136,7 @@ def test_show_today_none_defaults_to_date_today(display, fake_epd_module, tmp_pa
         def today(cls):
             return fake_today
 
-    monkeypatch.setattr("kidage.display.date", FakeDate)
+    monkeypatch.setattr("beanclock.display.date", FakeDate)
     black, red = _planes()
     display.show(black, red)
     assert (tmp_path / "last-clear").read_text() == "2026-07-04"

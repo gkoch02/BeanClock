@@ -6,7 +6,7 @@ from typing import Protocol
 
 from PIL import Image, ImageDraw, ImageFont
 
-from kidage.age import AgeBreakdown, pluralize
+from beanclock.age import AgeBreakdown, pluralize
 
 
 class AccentFn(Protocol):

@@ -1,6 +1,6 @@
 from datetime import UTC, date, datetime, timedelta, timezone
 
-from kidage.solar import sun_times
+from beanclock.solar import sun_times
 
 MDT = timezone(timedelta(hours=-6))
 MST = timezone(timedelta(hours=-7))
@@ -124,7 +124,7 @@ def test_antimeridian_longitudes_dont_crash():
 
 
 def test_polar_night_true_at_high_latitude_midwinter():
-    from kidage.solar import polar_night
+    from beanclock.solar import polar_night
 
     assert polar_night(date(2026, 12, 21), 80.0, 0.0) is True
 
@@ -132,12 +132,12 @@ def test_polar_night_true_at_high_latitude_midwinter():
 def test_polar_night_false_during_polar_day():
     """Midsummer at 80°N: the sun never sets — that's polar *day*, and the
     after-hours feature must not invert."""
-    from kidage.solar import polar_night
+    from beanclock.solar import polar_night
 
     assert polar_night(date(2026, 6, 21), 80.0, 0.0) is False
 
 
 def test_polar_night_false_at_mid_latitudes():
-    from kidage.solar import polar_night
+    from beanclock.solar import polar_night
 
     assert polar_night(date(2026, 12, 21), 40.0150, -105.2705) is False
