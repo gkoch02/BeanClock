@@ -51,10 +51,19 @@ if ! id beanclock >/dev/null 2>&1; then
             ${hw_groups:+--groups "$hw_groups"} beanclock
 fi
 
+# rsync --delete would wipe a checkout that lives inside the install dir.
+case "$REPO_DIR/" in
+    "$INSTALL_DIR"/*)
+        echo "Clone the repo outside $INSTALL_DIR (e.g. ~/BeanClock) and rerun." >&2
+        exit 1 ;;
+esac
+
 echo "==> Syncing source to $INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
+# Anchored so only the top-level .git/.venv are kept; an unanchored '.git'
+# also protects stale nested checkouts and makes --delete fail on them.
 rsync -a --delete \
-    --exclude '.git' --exclude '.venv' --exclude '__pycache__' \
+    --exclude '/.git' --exclude '/.venv' --exclude '__pycache__' \
     "$REPO_DIR"/ "$INSTALL_DIR"/
 
 # Must run after rsync --delete (which would otherwise wipe the file).
