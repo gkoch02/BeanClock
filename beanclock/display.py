@@ -78,10 +78,9 @@ def record_quiet(today: date) -> None:
     LAST_QUIET_FILE.write_text(today.isoformat())
 
 
-def show(black: Image.Image, red: Image.Image, today: date | None = None) -> None:
+def show(black: Image.Image, red: Image.Image, today: date) -> None:
     from vendor.waveshare_epd import epd2in13b_V4
 
-    today = today or date.today()
     epd = epd2in13b_V4.EPD()
     error: BaseException | None = None
     try:

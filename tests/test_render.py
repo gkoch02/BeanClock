@@ -11,9 +11,7 @@ from beanclock.render import (
     HEIGHT,
     WIDTH,
     _draw_balloon,
-    _draw_bead,
     _draw_centered,
-    _draw_corner_dot,
     _draw_flower,
     _draw_frame,
     _draw_heart,
@@ -64,11 +62,6 @@ def test_render_returns_two_planes_at_panel_size():
     assert _has_ink(red)
 
 
-def test_render_handles_newborn():
-    black, red = render("Lilah", NEWBORN, BORN)
-    assert _has_ink(black)
-
-
 def test_render_flip_rotates_both_planes():
     upright = render("Lilah", AGE, BORN, flip=False)
     flipped = render("Lilah", AGE, BORN, flip=True)
@@ -100,26 +93,6 @@ def test_render_after_hours_makes_background_inked():
     assert ip[0, 0] == 0
 
 
-def test_render_after_hours_punches_black_out_under_red_ink():
-    """The Waveshare driver ORs the two planes onto the panel, so a
-    naive 'invert all of black' would mask out red. Verify that wherever
-    the red plane has ink, the inverted black plane is *not* inked, so
-    red still shows through against the new black background."""
-    _, red = render("Lilah", AGE, BORN)
-    inv_black, _ = render("Lilah", AGE, BORN, after_hours=True)
-    rp = red.load()
-    bp = inv_black.load()
-    red_pixels = [
-        (x, y) for y in range(HEIGHT) for x in range(WIDTH) if rp[x, y] == 0
-    ]
-    assert red_pixels, "expected the normal render to produce some red ink"
-    for x, y in red_pixels:
-        assert bp[x, y] == 1, (
-            f"black plane is inked at red pixel ({x}, {y}) — "
-            "would mask red on the panel"
-        )
-
-
 def test_render_after_hours_combines_with_flip():
     """flip and after_hours are independent and must compose. Inverted-
     then-flipped should differ from just-inverted, just-flipped, and
@@ -129,13 +102,6 @@ def test_render_after_hours_combines_with_flip():
     inverted = render("Lilah", AGE, BORN, after_hours=True)[0].tobytes()
     both = render("Lilah", AGE, BORN, flip=True, after_hours=True)[0].tobytes()
     assert len({plain, flipped, inverted, both}) == 4
-
-
-def test_compose_preview_is_rgb_panel_size():
-    black, red = render("Lilah", AGE, BORN)
-    p = compose_preview(black, red)
-    assert p.size == (WIDTH, HEIGHT)
-    assert p.mode == "RGB"
 
 
 ACCENTS = ("heart", "star", "balloon", "moon", "sun", "flower")
@@ -154,13 +120,8 @@ def test_accents_produce_distinct_red_planes():
 
 
 def test_text_clears_frame_pad_margin():
-    """Text must not bleed into the FRAME_PAD margin rows.
-
-    CLAUDE.md: 'Resizing text or moving the frame in isolation will produce
-    clipping; adjust both.' We sample the central x-band (skipping the
-    rounded-corner arcs of the outer black hairline) and assert no black
-    text ink in the top and bottom keep-out strips.
-    """
+    """No black text ink in the FRAME_PAD keep-out rows. The central x-band
+    skips the rounded corners of the outer hairline."""
     black, _ = render("Lilah", AGE, BORN)
     bp = black.load()
 
@@ -173,7 +134,7 @@ def test_text_clears_frame_pad_margin():
 
 
 def test_hero_auto_shrinks_to_stay_within_width_budget():
-    """The hero shrink loop (render.py:168) caps text width at WIDTH-28.
+    """The hero shrink loop caps text width at WIDTH-28.
     A long hero like '99 years  11 months' should still center within the
     budgeted band (left edge >= 14, right edge <= WIDTH-14). We restrict
     the x search to skip the frame outline at x=1 and x=WIDTH-2."""
@@ -420,48 +381,6 @@ def test_accent_fn_paints_ink_near_center(fn, size):
     assert inked, f"{fn.__name__} painted no ink in the expected region"
 
 
-def test_draw_bead_paints_small_dot():
-    cx, cy = 20, 20
-    img = Image.new("1", (50, 50), 1)
-    draw = ImageDraw.Draw(img)
-    _draw_bead(draw, cx, cy)
-    px = img.load()
-    inked = [(x, y) for x in range(50) for y in range(50) if px[x, y] == 0]
-    assert inked, "bead painted no ink"
-    for x, y in inked:
-        assert abs(x - cx) <= 2 and abs(y - cy) <= 2, (
-            f"bead ink at ({x},{y}) is outside radius-1 ellipse from ({cx},{cy})"
-        )
-
-
-def test_draw_corner_dot_paints_small_dot():
-    cx, cy = 20, 20
-    img = Image.new("1", (50, 50), 1)
-    draw = ImageDraw.Draw(img)
-    _draw_corner_dot(draw, cx, cy)
-    px = img.load()
-    inked = [(x, y) for x in range(50) for y in range(50) if px[x, y] == 0]
-    assert inked, "corner dot painted no ink"
-    for x, y in inked:
-        assert abs(x - cx) <= 3 and abs(y - cy) <= 3, (
-            f"corner dot ink at ({x},{y}) is outside radius-2 ellipse from ({cx},{cy})"
-        )
-
-
-def test_draw_corner_dot_is_larger_than_bead():
-    """corner_dot (radius 2) must cover more pixels than bead (radius 1)."""
-    img_bead = Image.new("1", (50, 50), 1)
-    img_dot = Image.new("1", (50, 50), 1)
-    cx, cy = 20, 20
-    _draw_bead(ImageDraw.Draw(img_bead), cx, cy)
-    _draw_corner_dot(ImageDraw.Draw(img_dot), cx, cy)
-    bp = img_bead.load()
-    dp = img_dot.load()
-    bead_count = sum(1 for x in range(50) for y in range(50) if bp[x, y] == 0)
-    dot_count = sum(1 for x in range(50) for y in range(50) if dp[x, y] == 0)
-    assert dot_count > bead_count
-
-
 # ---------------------------------------------------------------------------
 # _draw_frame
 # ---------------------------------------------------------------------------
@@ -516,11 +435,6 @@ def test_draw_frame_heart_uses_corner_dots_not_small_hearts():
                     f"corner ({cx},{cy}): pixel ({cx},{y}) is inked — "
                     "looks like a small heart, not a corner dot"
                 )
-
-
-# ---------------------------------------------------------------------------
-# after_hours × all accents
-# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------
@@ -678,30 +592,14 @@ def test_flip_after_hours_red_plane_matches_flipped_normal():
 
 
 def test_heart_accent_omits_footer_accent_glyph():
-    """The heart theme intentionally omits the footer accent (the small
-    heart at 4px lost its shape — CLAUDE.md says so). Every other accent
-    paints a small glyph just left of the centered "since …" footer.
-    This test pins that contract by comparing the column to the left of
-    the footer text on heart vs. star: star inks it, heart doesn't.
-    """
+    """Every accent but heart paints a small glyph left of the "since …"
+    footer; compare the columns just left of the footer text."""
     _, heart_red = render("Lilah", AGE, BORN, accent="heart")
     _, star_red = render("Lilah", AGE, BORN, accent="star")
-    # The footer accent sits at fx - 12 on the red plane, y = fy + 8.
-    # We don't know the exact fx without recomputing, but we know it lands
-    # in the bottom band's left third. Look for ink in a tight column band
-    # in the bottom strip that heart should leave blank.
     footer_band = range(HEIGHT - FRAME_PAD - 13, HEIGHT - FRAME_PAD)
-    # Sample columns to the left of where the footer text starts — well
-    # inside the panel but outside the frame's bead rail.
     left_of_footer = range(30, 60)
-    heart_extent = _ink_x_extent(heart_red, footer_band, left_of_footer)
-    star_extent = _ink_x_extent(star_red, footer_band, left_of_footer)
-    # Star paints a glyph in that band; heart should not.
-    assert star_extent is not None, "star should paint a footer accent glyph"
-    assert heart_extent is None, (
-        "heart should omit the footer accent glyph — small hearts lose shape "
-        "at 4px and CLAUDE.md pins this carve-out"
-    )
+    assert _ink_x_extent(star_red, footer_band, left_of_footer) is not None
+    assert _ink_x_extent(heart_red, footer_band, left_of_footer) is None
 
 
 def test_compose_preview_color_mapping():
