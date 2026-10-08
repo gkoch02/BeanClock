@@ -124,16 +124,9 @@ birthday   = true                          # hero swaps to "Happy Nth Birthday!"
 milestones = [100, 500, 1000, 2000, 5000]  # hero swaps to "N days!"; [] disables
 ```
 
-When `after_hours_invert = true` the panel switches to white-on-black while
-it's dark out — after today's local sunset or before sunrise — computed
-on-device from `latitude`/`longitude` (NOAA algorithm, no network needed).
-Red beads and accents remain red. The inversion only fires within the
-`[wake_hour, sleep_hour]` window; deep-night hours still skip the refresh
-entirely.
-
 Every table in the config is strict: a typo'd key (`wake_hours = 8`,
-`layout = "full"`) fails at load time instead of silently rendering the
-default.
+`layout = "full"`) or a quoted boolean (`flip = "false"`) fails at load time
+instead of silently rendering the wrong thing.
 
 On a matching day the hero row is replaced and the standard age phrasing
 slides to the sub line, regardless of `display.format`. Feb 29 births

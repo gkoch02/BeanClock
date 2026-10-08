@@ -40,7 +40,7 @@ where = ["."]
 include = ["beanclock*", "vendor*"]
 
 [tool.setuptools.package-data]
-beanclock = ["py.typed", "fonts/Fredoka.ttf", "fonts/OFL.txt"]
+beanclock = ["fonts/Fredoka.ttf", "fonts/OFL.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

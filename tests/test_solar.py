@@ -117,10 +117,8 @@ def test_antimeridian_longitudes_dont_crash():
     assert east[0].tzinfo is UTC and east[1].tzinfo is UTC
     assert east[0] < east[1]
     assert west[0] < west[1]
-    # ±180° is the same meridian; the two answers should be very close (within
-    # ~1 day in raw seconds, since they refer to the same physical longitude
-    # but the formula resolves day-boundaries differently at the wrap).
-    assert abs((east[1] - west[1]).total_seconds()) < 24 * 3600
+    # Same meridian, but local date `d` at -180 is a day behind +180's.
+    assert abs((west[1] - east[1]) - timedelta(days=1)) < timedelta(minutes=1)
 
 
 def test_polar_night_true_at_high_latitude_midwinter():

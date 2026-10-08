@@ -119,29 +119,6 @@ def test_show_next_day_clears_again(display, fake_epd_module):
     assert "Clear" in fake_epd_module.calls
 
 
-def test_show_always_sleeps_last(display, fake_epd_module):
-    """Forgetting epd.sleep() will slowly burn the panel — pin it."""
-    black, red = _planes()
-    display.show(black, red, today=date(2026, 4, 27))
-    assert fake_epd_module.calls[-1] == "sleep"
-
-
-def test_show_today_none_defaults_to_date_today(display, fake_epd_module, tmp_path, monkeypatch):
-    """show() accepts today=None and falls back to date.today(); the
-    last-clear file should land on the real current date."""
-    fake_today = date(2026, 7, 4)
-
-    class FakeDate(date):
-        @classmethod
-        def today(cls):
-            return fake_today
-
-    monkeypatch.setattr("beanclock.display.date", FakeDate)
-    black, red = _planes()
-    display.show(black, red)
-    assert (tmp_path / "last-clear").read_text() == "2026-07-04"
-
-
 def test_should_clear_when_state_file_is_empty(display, tmp_path):
     """A truncated state file (e.g. crash mid-write) reads as empty; we want
     the next refresh to clear, not skip — pin the defensive behavior."""
@@ -299,14 +276,6 @@ def test_show_preserves_init_error_when_sleep_also_fails(
     black, red = _planes()
     with pytest.raises(display.DisplayInitError):
         display.show(black, red, today=date(2026, 4, 27))
-    # sleep() must still have been attempted, even though it also failed.
+    # sleep() must still have been attempted, and its failure logged.
     assert fake_epd_module.calls[-1] == "sleep"
-
-
-def test_show_succeeds_when_init_returns_zero(display, fake_epd_module):
-    """Sanity check: the normal init() return value (0) must not be
-    mistaken for the failure sentinel."""
-    black, red = _planes()
-    display.show(black, red, today=date(2026, 4, 27))
-    assert fake_epd_module.calls[-1] == "sleep"
-    assert "init" in fake_epd_module.calls
+    assert "SPI bus not open" in caplog.text

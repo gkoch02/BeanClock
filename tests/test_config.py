@@ -423,18 +423,19 @@ accent = "STAR"
     assert cfg.accent == "star"
 
 
-def test_flip_accepts_any_truthy_value(tmp_path):
-    """Current behavior: `flip = "yes"` is parsed by TOML as the string "yes",
-    then `bool()` coerces it to True. Pin this so a tightening (to require an
-    actual TOML bool) is an intentional, visible change."""
-    # TOML can't put a string into a bool field via type coercion, but we
-    # exercise the `bool(display.get(...))` call path with the boolean TOML
-    # literal and confirm it round-trips.
-    cfg = load(_write(tmp_path, """
+@pytest.mark.parametrize(("table", "key"), [
+    ("display", "flip"),
+    ("display", "after_hours_invert"),
+    ("special_days", "birthday"),
+])
+def test_rejects_quoted_boolean(tmp_path, table, key):
+    """`flip = "false"` must fail, not coerce to True via bool("false")."""
+    p = _write(tmp_path, f"""
 [kid]
 name = "X"
 born_at = 2024-01-01T00:00:00+00:00
-[display]
-flip = true
-"""))
-    assert cfg.flip is True
+[{table}]
+{key} = "false"
+""")
+    with pytest.raises(ValueError, match=key):
+        load(p)

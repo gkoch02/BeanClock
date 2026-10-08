@@ -39,6 +39,14 @@ def _reject_unknown(table: dict[str, object], where: str, allowed: set[str]) -> 
         )
 
 
+def _bool(table: dict[str, object], key: str, default: bool, where: str) -> bool:
+    # bool("false") is True, so a quoted value must fail rather than coerce.
+    value = table.get(key, default)
+    if not isinstance(value, bool):
+        raise ValueError(f"{where}.{key} must be true or false, got {value!r}")
+    return value
+
+
 def load(path: Path) -> Config:
     with path.open("rb") as fh:
         raw = tomllib.load(fh)
@@ -82,14 +90,14 @@ def load(path: Path) -> Config:
 
     display = raw.get("display", {})
     _reject_unknown(display, "under [display]", {"flip", "accent", "format", "after_hours_invert"})
-    flip = bool(display.get("flip", False))
+    flip = _bool(display, "flip", False, "display")
     accent = str(display.get("accent", "heart")).lower()
     if accent not in VALID_ACCENTS:
         raise ValueError(f"display.accent must be one of {sorted(VALID_ACCENTS)}")
     age_format = str(display.get("format", "extended")).lower()
     if age_format not in VALID_FORMATS:
         raise ValueError(f"display.format must be one of {sorted(VALID_FORMATS)}")
-    after_hours_invert = bool(display.get("after_hours_invert", False))
+    after_hours_invert = _bool(display, "after_hours_invert", False, "display")
 
     location = raw.get("location", {})
     _reject_unknown(location, "under [location]", {"latitude", "longitude"})
@@ -113,7 +121,7 @@ def load(path: Path) -> Config:
 
     special = raw.get("special_days", {})
     _reject_unknown(special, "under [special_days]", {"birthday", "milestones"})
-    birthday = bool(special.get("birthday", True))
+    birthday = _bool(special, "birthday", True, "special_days")
     raw_milestones = special.get("milestones", list(DEFAULT_MILESTONES))
     if not isinstance(raw_milestones, list) or not all(
         isinstance(m, int) and not isinstance(m, bool) and m > 0 for m in raw_milestones

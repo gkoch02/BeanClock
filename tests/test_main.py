@@ -1,11 +1,13 @@
+import logging
 import os
-from datetime import UTC
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
 from PIL import Image
 
+import beanclock.render
 from beanclock.__main__ import (
     VERSION_FILE_CANDIDATES,
     _default_config_path,
@@ -14,10 +16,110 @@ from beanclock.__main__ import (
     _version_string,
     main,
 )
+from beanclock.age import compute
 from beanclock.render import HEIGHT, WIDTH
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXAMPLE_CONFIG = REPO_ROOT / "config.example.toml"
+PT = timezone(timedelta(hours=-7))
+KID = '[kid]\nname = "Lily"\nborn_at = 2022-09-12T03:47:00-07:00\n'
+SCHEDULE = '[schedule]\nwake_hour = 7\nsleep_hour = 21\n'
+
+
+def _write_config(tmp_path: Path, body: str) -> Path:
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(body)
+    return cfg
+
+
+def _after_hours_config(tmp_path: Path) -> Path:
+    return _write_config(
+        tmp_path,
+        KID + SCHEDULE
+        + '[display]\nafter_hours_invert = true\n'
+        + '[location]\nlatitude = 40.0150\nlongitude = -105.2705\n',
+    )
+
+
+def _simple_live_config(tmp_path: Path) -> Path:
+    return _write_config(tmp_path, KID + SCHEDULE + '[display]\nformat = "full"\n')
+
+
+def _display():
+    # Imported per call: test_display.py reloads this module, and main()'s
+    # lazy import must see the same object these helpers patch.
+    import beanclock.display
+    return beanclock.display
+
+
+def _called_show(monkeypatch) -> list[tuple]:
+    """Patch display.show with a recorder and return the call list."""
+    calls: list[tuple] = []
+
+    def fake_show(black, red, today):
+        calls.append((black, red, today))
+
+    monkeypatch.setattr(_display(), "show", fake_show)
+    return calls
+
+
+def _state_in_tmp(monkeypatch, tmp_path):
+    """Keep live-path state files (last-clear / last-quiet) out of /var/lib."""
+    display = _display()
+    monkeypatch.setattr(display, "STATE_DIR", tmp_path)
+    monkeypatch.setattr(display, "LAST_CLEAR_FILE", tmp_path / "last-clear")
+    monkeypatch.setattr(display, "LAST_QUIET_FILE", tmp_path / "last-quiet")
+
+
+def _capture_render(monkeypatch) -> dict:
+    """Wrap render() so a test can read what main() passed it. Positional
+    args land under "args"; keyword args under their own names."""
+    captured: dict = {}
+
+    def fake_render(*args, **kwargs):
+        captured.update(kwargs, args=args)
+        return beanclock.render.render(*args, **kwargs)
+    monkeypatch.setattr("beanclock.__main__.render", fake_render)
+    return captured
+
+
+def _freeze_now(monkeypatch, frozen):
+    """Pin main()'s wall clock to `frozen` (naive; tz comes from _system_zone)."""
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return frozen.replace(tzinfo=tz)
+    monkeypatch.setattr("beanclock.__main__.datetime", FrozenDateTime)
+
+
+def _live_pacific(monkeypatch, tmp_path, frozen) -> list[tuple]:
+    """Set up a live (no --now) run at `frozen` Pacific time with display.show
+    recorded and state files in tmp_path. Returns the show() call list."""
+    monkeypatch.setattr("beanclock.__main__._system_zone", lambda: PT)
+    _freeze_now(monkeypatch, frozen)
+    _state_in_tmp(monkeypatch, tmp_path)
+    return _called_show(monkeypatch)
+
+
+def _fake_etc(monkeypatch, tmp_path, *, localtime=None, timezone_file=None):
+    """Redirect _system_zone's /etc/localtime and /etc/timezone lookups."""
+    real_path = Path
+    paths = {
+        "/etc/localtime": localtime or tmp_path / "missing-localtime",
+        "/etc/timezone": timezone_file or tmp_path / "missing-timezone",
+    }
+    monkeypatch.setattr(
+        "beanclock.__main__.Path", lambda arg: paths.get(arg) or real_path(arg)
+    )
+
+
+def _localtime_symlink(tmp_path, zone: str) -> Path:
+    tzdata = tmp_path / "zoneinfo" / zone
+    tzdata.parent.mkdir(parents=True)
+    tzdata.write_bytes(b"")
+    link = tmp_path / "localtime"
+    os.symlink(tzdata, link)
+    return link
 
 
 def test_preview_writes_png_at_panel_size(tmp_path):
@@ -80,208 +182,91 @@ def test_default_config_path_falls_back_to_etc(monkeypatch, tmp_path):
     assert _default_config_path() == Path("/etc/beanclock/config.toml")
 
 
-def test_main_invokes_display_when_no_preview(tmp_path, monkeypatch):
+def test_main_invokes_display_when_no_preview(monkeypatch):
     """Without --preview, main() should hand the planes to display.show."""
-    captured = {}
-
-    def fake_show(black, red, today=None):
-        captured["black"] = black
-        captured["red"] = red
-        captured["today"] = today
-
-    import beanclock.display
-    monkeypatch.setattr(beanclock.display, "show", fake_show)
-    # __main__ does `from beanclock.display import show` inside the function,
-    # so patching the module attribute is enough.
-
+    calls = _called_show(monkeypatch)
     rc = main([
         "--config", str(EXAMPLE_CONFIG),
         "--now", "2026-04-27T07:47:00-07:00",
     ])
     assert rc == 0
-    assert captured["black"].size == (WIDTH, HEIGHT)
-    assert captured["red"].size == (WIDTH, HEIGHT)
-    assert captured["today"].isoformat() == "2026-04-27"
+    [(black, red, today)] = calls
+    assert black.size == (WIDTH, HEIGHT)
+    assert red.size == (WIDTH, HEIGHT)
+    assert today.isoformat() == "2026-04-27"
 
 
-def _called_show(monkeypatch) -> list[tuple]:
-    """Patch display.show with a recorder and return the call list."""
-    calls: list[tuple] = []
-
-    def fake_show(black, red, today=None):
-        calls.append((black, red, today))
-
-    import beanclock.display
-    monkeypatch.setattr(beanclock.display, "show", fake_show)
-    return calls
-
-
-def _state_in_tmp(monkeypatch, tmp_path):
-    """Point the display state files (last-clear / last-quiet) at tmp_path
-    so live-path tests never touch /var/lib/beanclock."""
-    import beanclock.display
-    monkeypatch.setattr(beanclock.display, "STATE_DIR", tmp_path)
-    monkeypatch.setattr(beanclock.display, "LAST_CLEAR_FILE", tmp_path / "last-clear")
-    monkeypatch.setattr(beanclock.display, "LAST_QUIET_FILE", tmp_path / "last-quiet")
-
-
-def test_main_skips_display_before_wake_hour(monkeypatch):
+@pytest.mark.parametrize(("now", "shows"), [
+    ("2026-04-27T06:59:00-07:00", 0),  # before wake_hour
+    ("2026-04-27T07:00:00-07:00", 1),  # wake_hour is inclusive
+    ("2026-04-27T21:30:00-07:00", 1),  # sleep_hour is inclusive
+    ("2026-04-27T22:00:00-07:00", 0),  # after sleep_hour
+])
+def test_main_respects_wake_window(monkeypatch, now, shows):
     calls = _called_show(monkeypatch)
-    rc = main([
-        "--config", str(EXAMPLE_CONFIG),
-        "--now", "2026-04-27T06:59:00-07:00",
-    ])
-    assert rc == 0
-    assert calls == []
-
-
-def test_main_skips_display_after_sleep_hour(monkeypatch):
-    calls = _called_show(monkeypatch)
-    rc = main([
-        "--config", str(EXAMPLE_CONFIG),
-        "--now", "2026-04-27T22:00:00-07:00",
-    ])
-    assert rc == 0
-    assert calls == []
-
-
-def test_main_runs_at_wake_hour_inclusive(monkeypatch):
-    calls = _called_show(monkeypatch)
-    rc = main([
-        "--config", str(EXAMPLE_CONFIG),
-        "--now", "2026-04-27T07:00:00-07:00",
-    ])
-    assert rc == 0
-    assert len(calls) == 1
-
-
-def test_main_runs_at_sleep_hour_inclusive(monkeypatch):
-    calls = _called_show(monkeypatch)
-    rc = main([
-        "--config", str(EXAMPLE_CONFIG),
-        "--now", "2026-04-27T21:30:00-07:00",
-    ])
-    assert rc == 0
-    assert len(calls) == 1
+    assert main(["--config", str(EXAMPLE_CONFIG), "--now", now]) == 0
+    assert len(calls) == shows
 
 
 def test_system_zone_reads_localtime_symlink(tmp_path, monkeypatch):
     # Most distros ship /etc/localtime as a symlink into /usr/share/zoneinfo.
-    fake_tzdata = tmp_path / "zoneinfo" / "America" / "Los_Angeles"
-    fake_tzdata.parent.mkdir(parents=True)
-    fake_tzdata.write_bytes(b"")
-    fake_localtime = tmp_path / "localtime"
-    os.symlink(fake_tzdata, fake_localtime)
-
-    real_path = Path
-    def fake_path(arg):
-        if arg == "/etc/localtime":
-            return fake_localtime
-        if arg == "/etc/timezone":
-            return tmp_path / "missing-timezone"
-        return real_path(arg)
-    monkeypatch.setattr("beanclock.__main__.Path", fake_path)
-
-    zone = _system_zone()
-    assert isinstance(zone, ZoneInfo)
-    assert str(zone) == "America/Los_Angeles"
-
-
-def test_system_zone_falls_back_to_utc_when_nothing_configured(tmp_path, monkeypatch):
-    # Belt-and-braces: a host with neither a /etc/localtime symlink nor an
-    # /etc/timezone file shouldn't crash; UTC is a safe default.
-    real_path = Path
-    def fake_path(arg):
-        if arg == "/etc/localtime":
-            return tmp_path / "missing-localtime"
-        if arg == "/etc/timezone":
-            return tmp_path / "missing-timezone"
-        return real_path(arg)
-    monkeypatch.setattr("beanclock.__main__.Path", fake_path)
-
-    zone = _system_zone()
-    assert isinstance(zone, ZoneInfo)
-    assert str(zone) == "UTC"
+    _fake_etc(
+        monkeypatch, tmp_path,
+        localtime=_localtime_symlink(tmp_path, "America/Los_Angeles"),
+    )
+    assert _system_zone() == ZoneInfo("America/Los_Angeles")
 
 
 def test_system_zone_falls_back_to_etc_timezone(tmp_path, monkeypatch):
-    # Some Debian-likes write the IANA name to /etc/timezone instead of (or
-    # alongside) the symlink.
-    fake_timezone = tmp_path / "timezone"
-    fake_timezone.write_text("America/New_York\n")
+    # Some Debian-likes write the IANA name to /etc/timezone instead.
+    tz_file = tmp_path / "timezone"
+    tz_file.write_text("America/New_York\n")
+    _fake_etc(monkeypatch, tmp_path, timezone_file=tz_file)
+    assert _system_zone() == ZoneInfo("America/New_York")
 
-    real_path = Path
-    def fake_path(arg):
-        if arg == "/etc/localtime":
-            return tmp_path / "missing-localtime"
-        if arg == "/etc/timezone":
-            return fake_timezone
-        return real_path(arg)
-    monkeypatch.setattr("beanclock.__main__.Path", fake_path)
 
-    zone = _system_zone()
-    assert isinstance(zone, ZoneInfo)
-    assert str(zone) == "America/New_York"
+def test_system_zone_falls_back_to_utc_when_nothing_configured(tmp_path, monkeypatch):
+    _fake_etc(monkeypatch, tmp_path)
+    assert _system_zone() == ZoneInfo("UTC")
+
+
+def test_system_zone_falls_back_when_localtime_is_a_regular_file(tmp_path, monkeypatch):
+    """A copied (not symlinked) tzdata blob has no zone name to read; with no
+    /etc/timezone alongside, fall back to UTC rather than guessing."""
+    localtime = tmp_path / "localtime"
+    localtime.write_bytes(b"\x00TZif2")
+    _fake_etc(monkeypatch, tmp_path, localtime=localtime)
+    assert _system_zone() == ZoneInfo("UTC")
 
 
 def test_live_now_carries_dst_aware_zoneinfo(tmp_path, monkeypatch):
-    # End-to-end DST regression for the live path (no --now). born_at is
-    # saved at fixed -08:00 (PST when the config was written); the system
-    # is in America/Los_Angeles and "now" is in summer. With a fixed-offset
-    # tzinfo on now, compute would project born_at into -07:00 and report
-    # 23 hours on the monthly anniversary. With a ZoneInfo, it lands at 0.
-    cfg = tmp_path / "config.toml"
-    cfg.write_text(
-        '[kid]\n'
-        'name = "Lily"\n'
-        'born_at = 2024-03-09T13:54:00-08:00\n'
-        '[schedule]\nwake_hour = 7\nsleep_hour = 21\n'
-        '[display]\nflip = false\naccent = "heart"\nformat = "extended"\n'
-        '[special_days]\nbirthday = true\nmilestones = []\n'
+    # born_at is saved at fixed -08:00 and "now" is a summer anniversary in
+    # America/Los_Angeles. A fixed-offset now would report 23 hours; a
+    # ZoneInfo now lands on 0.
+    cfg = _write_config(
+        tmp_path,
+        '[kid]\nname = "Lily"\nborn_at = 2024-03-09T13:54:00-08:00\n'
+        + SCHEDULE + '[special_days]\nmilestones = []\n',
     )
-
-    fake_tzdata = tmp_path / "zoneinfo" / "America" / "Los_Angeles"
-    fake_tzdata.parent.mkdir(parents=True)
-    fake_tzdata.write_bytes(b"")
-    fake_localtime = tmp_path / "localtime"
-    os.symlink(fake_tzdata, fake_localtime)
-    real_path = Path
-    def fake_path(arg):
-        if arg == "/etc/localtime":
-            return fake_localtime
-        if arg == "/etc/timezone":
-            return tmp_path / "missing"
-        return real_path(arg)
-    monkeypatch.setattr("beanclock.__main__.Path", fake_path)
-
-    # Pin datetime.now to a summer anniversary moment in PDT.
-    from datetime import datetime as _dt
-
-    class FakeDateTime(_dt):
-        @classmethod
-        def now(cls, tz=None):
-            return _dt(2026, 4, 9, 13, 54, tzinfo=tz)
-    monkeypatch.setattr("beanclock.__main__.datetime", FakeDateTime)
+    _fake_etc(
+        monkeypatch, tmp_path,
+        localtime=_localtime_symlink(tmp_path, "America/Los_Angeles"),
+    )
+    _freeze_now(monkeypatch, datetime(2026, 4, 9, 13, 54))
+    _called_show(monkeypatch)
+    _state_in_tmp(monkeypatch, tmp_path)
 
     captured = {}
-    real_compute = __import__("beanclock.age", fromlist=["compute"]).compute
+
     def fake_compute(born_at, now):
         captured["now"] = now
-        return real_compute(born_at, now)
+        return compute(born_at, now)
     monkeypatch.setattr("beanclock.__main__.compute", fake_compute)
 
-    # Patch display.show so the live path doesn't try to touch hardware.
-    import beanclock.display
-    monkeypatch.setattr(beanclock.display, "show", lambda *_, **__: None)
-
-    rc = main(["--config", str(cfg)])
-    assert rc == 0
+    assert main(["--config", str(cfg)]) == 0
     now = captured["now"]
-    assert isinstance(now.tzinfo, ZoneInfo)
-    assert str(now.tzinfo) == "America/Los_Angeles"
-
-    from beanclock.age import compute
-    age = compute(_dt.fromisoformat("2024-03-09T13:54:00-08:00"), now)
+    assert now.tzinfo == ZoneInfo("America/Los_Angeles")
+    age = compute(datetime.fromisoformat("2024-03-09T13:54:00-08:00"), now)
     assert (age.years, age.months, age.days, age.hours) == (2, 1, 0, 0)
 
 
@@ -329,6 +314,20 @@ def test_version_string_includes_revision_when_present(tmp_path, monkeypatch):
     assert s.startswith("beanclock ")
 
 
+def test_version_string_when_package_metadata_missing(tmp_path, monkeypatch):
+    """Running from a source tree that was never pip-installed."""
+    from importlib import metadata
+
+    def boom(name):
+        raise metadata.PackageNotFoundError(name)
+
+    monkeypatch.setattr("beanclock.__main__.metadata.version", boom)
+    monkeypatch.setattr(
+        "beanclock.__main__.VERSION_FILE_CANDIDATES", [tmp_path / "missing"]
+    )
+    assert _version_string() == "beanclock unknown"
+
+
 def test_version_flag_prints_and_exits_zero(tmp_path, monkeypatch, capsys):
     f = tmp_path / "VERSION"
     f.write_text("v0.1.0-3-gabc1234-dirty\n")
@@ -342,408 +341,26 @@ def test_version_flag_prints_and_exits_zero(tmp_path, monkeypatch, capsys):
 
 
 def test_version_candidates_include_install_dir_path():
-    # Regression guard: install.sh writes /opt/beanclock/VERSION, but a
-    # non-editable `pip install` puts beanclock/__main__.py under
-    # .venv/lib/.../site-packages, so a __file__-relative path alone won't
-    # find it. The deployed install dir must stay in the candidate list.
+    # A non-editable install puts __main__.py in site-packages, so the
+    # __file__-relative candidate alone can't find install.sh's stamp.
     assert Path("/opt/beanclock/VERSION") in VERSION_FILE_CANDIDATES
 
 
-def test_preview_ignores_wake_window(tmp_path, monkeypatch):
-    """--preview is for layout work and must render at any hour."""
-    calls = _called_show(monkeypatch)
-    out = tmp_path / "preview.png"
-    rc = main([
-        "--config", str(EXAMPLE_CONFIG),
-        "--preview", str(out),
-        "--now", "2026-04-27T03:00:00-07:00",
-    ])
-    assert rc == 0
-    assert out.exists()
-    assert calls == []  # preview path never touches display.show
-
-
-def _after_hours_config(tmp_path: Path) -> Path:
-    """Minimal config that opts in to after-hours inversion."""
-    cfg = tmp_path / "config.toml"
-    cfg.write_text(
-        '[kid]\n'
-        'name = "Lily"\n'
-        'born_at = 2022-09-12T03:47:00-07:00\n'
-        '[schedule]\nwake_hour = 7\nsleep_hour = 21\n'
-        '[display]\n'
-        'after_hours_invert = true\n'
-        '[location]\nlatitude = 40.0150\nlongitude = -105.2705\n'
-    )
-    return cfg
-
-
-def test_after_hours_preview_via_cli_flag_inverts(tmp_path, monkeypatch):
-    """--after-hours forces inversion regardless of --now / sunset, so
-    layout previews don't have to wait for dusk."""
-    out_normal = tmp_path / "normal.png"
-    out_after = tmp_path / "after.png"
-    main([
-        "--config", str(EXAMPLE_CONFIG),
-        "--preview", str(out_normal),
-        "--now", "2026-04-27T12:00:00-07:00",
-    ])
-    main([
-        "--config", str(EXAMPLE_CONFIG),
-        "--after-hours",
-        "--preview", str(out_after),
-        "--now", "2026-04-27T12:00:00-07:00",
-    ])
-    assert out_normal.read_bytes() != out_after.read_bytes()
-
-
-def _capture_render(monkeypatch) -> dict:
-    """Wrap render() so a test can read the kwargs main() passed it."""
-    import beanclock.render
-    captured: dict = {}
-
-    def fake_render(*args, **kwargs):
-        captured.update(kwargs)
-        return beanclock.render.render(*args, **kwargs)
-    monkeypatch.setattr("beanclock.__main__.render", fake_render)
-    return captured
-
-
-def _freeze_now(monkeypatch, frozen):
-    """Pin main()'s wall clock to `frozen` (naive; tz comes from _system_zone)."""
-    from datetime import datetime as _dt
-
-    class FrozenDateTime(_dt):
-        @classmethod
-        def now(cls, tz=None):
-            return frozen.replace(tzinfo=tz)
-    monkeypatch.setattr("beanclock.__main__.datetime", FrozenDateTime)
-
-
-@pytest.mark.parametrize(
-    ("hour", "minute", "expected"),
-    [
-        (12, 0, False),
-        (19, 0, False),  # look-ahead 19:30 is still before sunset
-        (19, 38, True),  # look-ahead lands exactly on sunset
-        (20, 0, True),   # 8 min before sunset, but most of the hour is dark
-        (21, 0, True),
-    ],
-)
-def test_live_after_hours_tracks_sunset_with_30min_lookahead(
-    tmp_path, monkeypatch, hour, minute, expected
-):
-    from datetime import datetime as _dt
-    from datetime import timedelta as _td
-    from datetime import timezone as _tz
-
-    cfg = _after_hours_config(tmp_path)
-    fake_sunrise = _dt(2026, 5, 16, 12, 45, tzinfo=UTC)  # 05:45 PDT
-    fake_sunset = _dt(2026, 5, 17, 3, 8, tzinfo=UTC)     # 20:08 PDT
+@pytest.mark.parametrize(("verbose", "level"), [(True, logging.DEBUG), (False, logging.INFO)])
+def test_verbose_flag_sets_log_level(monkeypatch, verbose, level):
+    captured = {}
     monkeypatch.setattr(
-        "beanclock.solar.sun_times",
-        lambda d, lat, lon: (fake_sunrise, fake_sunset),
+        "beanclock.__main__.logging.basicConfig",
+        lambda **kwargs: captured.update(kwargs),
     )
-    monkeypatch.setattr("beanclock.__main__._system_zone", lambda: _tz(_td(hours=-7)))
-    _freeze_now(monkeypatch, _dt(2026, 5, 16, hour, minute))
-    captured = _capture_render(monkeypatch)
     _called_show(monkeypatch)
-    _state_in_tmp(monkeypatch, tmp_path)
-
-    assert main(["--config", str(cfg)]) == 0
-    assert captured["after_hours"] is expected
-
-
-def test_quiet_preview_via_cli_flag_changes_render(tmp_path):
-    """--quiet forces the quiet layout regardless of --now / sleep_hour, so
-    layout previews don't have to wait until 21:00."""
-    out_normal = tmp_path / "normal.png"
-    out_quiet = tmp_path / "quiet.png"
-    main([
-        "--config", str(EXAMPLE_CONFIG),
-        "--preview", str(out_normal),
-        "--now", "2026-04-27T12:00:00-07:00",
-    ])
-    main([
-        "--config", str(EXAMPLE_CONFIG),
-        "--quiet",
-        "--preview", str(out_quiet),
-        "--now", "2026-04-27T12:00:00-07:00",
-    ])
-    assert out_normal.read_bytes() != out_quiet.read_bytes()
-
-
-def test_live_quiet_triggers_at_sleep_hour(tmp_path, monkeypatch):
-    """A live refresh at sleep_hour renders quiet and records the marker."""
-    from datetime import datetime as _dt
-    from datetime import timedelta as _td
-    from datetime import timezone as _tz
-
-    cfg = tmp_path / "config.toml"
-    cfg.write_text(
-        '[kid]\n'
-        'name = "Lily"\n'
-        'born_at = 2022-09-12T03:47:00-07:00\n'
-        '[schedule]\nwake_hour = 7\nsleep_hour = 21\n'
-        '[display]\nformat = "full"\n'
-    )
-    monkeypatch.setattr("beanclock.__main__._system_zone", lambda: _tz(_td(hours=-7)))
-    _freeze_now(monkeypatch, _dt(2026, 4, 27, 21, 0))
-    captured = _capture_render(monkeypatch)
-    _called_show(monkeypatch)
-    _state_in_tmp(monkeypatch, tmp_path)
-
-    assert main(["--config", str(cfg)]) == 0
-    assert captured["quiet"] is True
-    assert (tmp_path / "last-quiet").read_text() == "2026-04-27"
-
-
-def test_live_quiet_does_not_trigger_before_sleep_hour(tmp_path, monkeypatch):
-    """A refresh at sleep_hour-1 must NOT engage quiet mode — only the
-    final hour does."""
-    cfg = tmp_path / "config.toml"
-    cfg.write_text(
-        '[kid]\n'
-        'name = "Lily"\n'
-        'born_at = 2022-09-12T03:47:00-07:00\n'
-        '[schedule]\nwake_hour = 7\nsleep_hour = 21\n'
-        '[display]\nformat = "full"\n'
-    )
-
-    from datetime import datetime as _dt
-    from datetime import timedelta as _td
-    from datetime import timezone as _tz
-    PT = _tz(_td(hours=-7))
-    monkeypatch.setattr("beanclock.__main__._system_zone", lambda: PT)
-
-    captured = {}
-    real_render = __import__("beanclock.render", fromlist=["render"]).render
-    def fake_render(*args, **kwargs):
-        captured["quiet"] = kwargs.get("quiet", False)
-        return real_render(*args, **kwargs)
-    monkeypatch.setattr("beanclock.__main__.render", fake_render)
-
-    class JustBeforeSleep(_dt):
-        @classmethod
-        def now(cls, tz=None):
-            return _dt(2026, 4, 27, 20, 0, tzinfo=tz)
-    monkeypatch.setattr("beanclock.__main__.datetime", JustBeforeSleep)
-    _called_show(monkeypatch)
-    assert main(["--config", str(cfg)]) == 0
-    assert captured["quiet"] is False
-
-
-def test_main_passes_special_string_to_render_on_birthday(tmp_path, monkeypatch):
-    """End-to-end-ish: on the kid's birthday, main() must hand render() the
-    actual override string from detect_special(), not just *some* non-None
-    value. Image-diff tests prove the byte stream differs but a regression
-    that passed any non-None placeholder would still pass them."""
-    cfg = tmp_path / "config.toml"
-    cfg.write_text(
-        '[kid]\n'
-        'name = "Lilah"\n'
-        'born_at = 2022-09-12T03:47:00-07:00\n'
-        '[schedule]\nwake_hour = 7\nsleep_hour = 21\n'
-    )
-    captured = {}
-    real_render = __import__("beanclock.render", fromlist=["render"]).render
-
-    def fake_render(*args, **kwargs):
-        captured["special"] = kwargs.get("special")
-        return real_render(*args, **kwargs)
-
-    monkeypatch.setattr("beanclock.__main__.render", fake_render)
-    rc = main([
-        "--config", str(cfg),
-        "--preview", str(tmp_path / "out.png"),
-        "--now", "2026-09-12T08:00:00-07:00",
-    ])
-    assert rc == 0
-    assert captured["special"] == "Happy 4th Birthday!"
-
-
-def test_main_no_special_passes_none_to_render(tmp_path, monkeypatch):
-    """And the other side: an ordinary refresh must pass special=None, not
-    an empty string. The render() branch is `if special is not None:`, so
-    an empty string would still take the special-day code path."""
-    captured = {}
-    real_render = __import__("beanclock.render", fromlist=["render"]).render
-
-    def fake_render(*args, **kwargs):
-        captured["special"] = kwargs.get("special")
-        return real_render(*args, **kwargs)
-
-    monkeypatch.setattr("beanclock.__main__.render", fake_render)
-    rc = main([
-        "--config", str(EXAMPLE_CONFIG),
-        "--preview", str(tmp_path / "out.png"),
-        "--now", "2026-04-27T07:47:00-07:00",
-    ])
-    assert rc == 0
-    assert captured["special"] is None
-
-
-@pytest.mark.parametrize("is_polar_night,expected", [(True, True), (False, False)])
-def test_live_polar_sun_times_none_consults_polar_night(
-    tmp_path, monkeypatch, is_polar_night, expected
-):
-    """When sun_times() returns None the sun never crosses the horizon that
-    day: polar night must invert all day, polar day must never invert."""
-    cfg = _after_hours_config(tmp_path)
-
-    from datetime import datetime as _dt
-    from datetime import timedelta as _td
-    from datetime import timezone as _tz
-
-    monkeypatch.setattr("beanclock.solar.sun_times", lambda d, lat, lon: None)
-    monkeypatch.setattr(
-        "beanclock.solar.polar_night", lambda d, lat, lon: is_polar_night
-    )
-    PT = _tz(_td(hours=-7))
-    monkeypatch.setattr("beanclock.__main__._system_zone", lambda: PT)
-
-    captured = {}
-    real_render = __import__("beanclock.render", fromlist=["render"]).render
-
-    def fake_render(*args, **kwargs):
-        captured["after_hours"] = kwargs.get("after_hours", False)
-        return real_render(*args, **kwargs)
-
-    monkeypatch.setattr("beanclock.__main__.render", fake_render)
-
-    class Evening(_dt):
-        @classmethod
-        def now(cls, tz=None):
-            return _dt(2026, 6, 21, 20, 0, tzinfo=tz)
-
-    monkeypatch.setattr("beanclock.__main__.datetime", Evening)
-    _called_show(monkeypatch)
-    rc = main(["--config", str(cfg)])
-    assert rc == 0
-    assert captured["after_hours"] is expected
-
-
-def test_verbose_flag_enables_debug_logging(tmp_path, monkeypatch):
-    """`-v` switches logging.basicConfig to DEBUG. Pin it so a future
-    argparse refactor that drops the flag doesn't go unnoticed."""
-    import logging
-
-    captured = {}
-
-    def fake_basic_config(**kwargs):
-        captured["level"] = kwargs.get("level")
-
-    monkeypatch.setattr("beanclock.__main__.logging.basicConfig", fake_basic_config)
-    _called_show(monkeypatch)
-
-    rc = main([
-        "--config", str(EXAMPLE_CONFIG),
-        "--now", "2026-04-27T07:47:00-07:00",
-        "-v",
-    ])
-    assert rc == 0
-    assert captured["level"] == logging.DEBUG
-
-
-def test_default_logging_is_info(tmp_path, monkeypatch):
-    """Without -v, logging stays at INFO."""
-    import logging
-
-    captured = {}
-
-    def fake_basic_config(**kwargs):
-        captured["level"] = kwargs.get("level")
-
-    monkeypatch.setattr("beanclock.__main__.logging.basicConfig", fake_basic_config)
-    _called_show(monkeypatch)
-
-    rc = main([
-        "--config", str(EXAMPLE_CONFIG),
-        "--now", "2026-04-27T07:47:00-07:00",
-    ])
-    assert rc == 0
-    assert captured["level"] == logging.INFO
-
-
-def test_system_zone_falls_back_when_localtime_is_a_regular_file(tmp_path, monkeypatch):
-    """Some distros ship /etc/localtime as a *copy* of the tzdata blob rather
-    than a symlink. With no /etc/timezone alongside, _system_zone must fall
-    back to UTC rather than crashing or guessing."""
-    # Regular file (not a symlink) → is_symlink() is False, marker check
-    # never runs. No /etc/timezone file. UTC fallback.
-    fake_localtime = tmp_path / "localtime"
-    fake_localtime.write_bytes(b"\x00TZif2")  # plausible tzdata header
-
-    real_path = Path
-    def fake_path(arg):
-        if arg == "/etc/localtime":
-            return fake_localtime
-        if arg == "/etc/timezone":
-            return tmp_path / "missing-timezone"
-        return real_path(arg)
-    monkeypatch.setattr("beanclock.__main__.Path", fake_path)
-
-    zone = _system_zone()
-    assert isinstance(zone, ZoneInfo)
-    assert str(zone) == "UTC"
-
-
-def test_version_string_when_package_metadata_missing(tmp_path, monkeypatch):
-    """If beanclock isn't actually installed (running straight out of the source
-    tree without `pip install -e .`), metadata.version raises
-    PackageNotFoundError — the version string falls back to 'unknown'."""
-    from importlib import metadata
-
-    def boom(name):
-        raise metadata.PackageNotFoundError(name)
-
-    monkeypatch.setattr("beanclock.__main__.metadata.version", boom)
-    monkeypatch.setattr(
-        "beanclock.__main__.VERSION_FILE_CANDIDATES", [tmp_path / "missing"]
-    )
-    s = _version_string()
-    assert s == "beanclock unknown"
-
-
-def test_live_after_hours_disabled_never_inverts(tmp_path, monkeypatch):
-    """A config that omits after_hours_invert must never invert, even
-    past sunset — and must skip the sunset calc entirely so a
-    misconfigured location can't cause surprises."""
-    from datetime import datetime as _dt
-    from datetime import timedelta as _td
-    from datetime import timezone as _tz
-
-    cfg = tmp_path / "config.toml"
-    cfg.write_text(
-        '[kid]\n'
-        'name = "Lily"\n'
-        'born_at = 2022-09-12T03:47:00-07:00\n'
-        '[schedule]\nwake_hour = 7\nsleep_hour = 21\n'
-    )
-
-    PT = _tz(_td(hours=-7))
-
-    class FakeDateTime(_dt):
-        @classmethod
-        def now(cls, tz=None):
-            return _dt(2026, 4, 27, 20, 30, tzinfo=tz)  # past sunset
-    monkeypatch.setattr("beanclock.__main__.datetime", FakeDateTime)
-    monkeypatch.setattr("beanclock.__main__._system_zone", lambda: PT)
-
-    # If after_hours_invert is off, sun_times must not be called.
-    def boom(*args, **kwargs):
-        raise AssertionError("sun_times called when after-hours is off")
-    monkeypatch.setattr("beanclock.solar.sun_times", boom)
-
-    calls = _called_show(monkeypatch)
-    rc = main(["--config", str(cfg)])
-    assert rc == 0
-    assert len(calls) == 1
+    args = ["--config", str(EXAMPLE_CONFIG), "--now", "2026-04-27T07:47:00-07:00"]
+    assert main(args + (["-v"] if verbose else [])) == 0
+    assert captured["level"] == level
 
 
 def test_naive_now_is_rejected_with_clean_error(tmp_path, capsys):
-    """A --now without a UTC offset used to traceback from age.compute; it
-    must be an argparse error instead."""
+    """A --now without a UTC offset must be an argparse error, not a traceback."""
     with pytest.raises(SystemExit) as excinfo:
         main([
             "--config", str(EXAMPLE_CONFIG),
@@ -765,254 +382,228 @@ def test_garbage_now_is_rejected_with_clean_error(tmp_path, capsys):
     assert "ISO 8601" in capsys.readouterr().err
 
 
-def test_live_after_hours_inverts_before_sunrise(tmp_path, monkeypatch):
-    """Dark winter mornings: a refresh whose upcoming hour is mostly before
-    sunrise must render the inverted look, symmetric with the sunset side."""
+def test_preview_ignores_wake_window(tmp_path, monkeypatch):
+    """--preview is for layout work and must render at any hour."""
+    calls = _called_show(monkeypatch)
+    out = tmp_path / "preview.png"
+    rc = main([
+        "--config", str(EXAMPLE_CONFIG),
+        "--preview", str(out),
+        "--now", "2026-04-27T03:00:00-07:00",
+    ])
+    assert rc == 0
+    assert out.exists()
+    assert calls == []
+
+
+@pytest.mark.parametrize(("flags", "after_hours", "quiet"), [
+    ([], False, False),
+    (["--after-hours"], True, False),
+    (["--quiet"], False, True),
+])
+def test_preview_layout_flags_reach_render(tmp_path, monkeypatch, flags, after_hours, quiet):
+    """--after-hours / --quiet force their layouts in previews, and only
+    their own: a swapped wiring must fail here."""
+    captured = _capture_render(monkeypatch)
+    assert main([
+        "--config", str(EXAMPLE_CONFIG),
+        "--preview", str(tmp_path / "out.png"),
+        "--now", "2026-04-27T12:00:00-07:00",
+        *flags,
+    ]) == 0
+    assert captured["after_hours"] is after_hours
+    assert captured["quiet"] is quiet
+
+
+@pytest.mark.parametrize(
+    ("hour", "minute", "expected"),
+    [
+        (12, 0, False),
+        (19, 0, False),  # look-ahead 19:30 is still before sunset
+        (19, 38, True),  # look-ahead lands exactly on sunset
+        (20, 0, True),   # 8 min before sunset, but most of the hour is dark
+        (21, 0, True),
+    ],
+)
+def test_live_after_hours_tracks_sunset_with_30min_lookahead(
+    tmp_path, monkeypatch, hour, minute, expected
+):
     cfg = _after_hours_config(tmp_path)
+    fake_sunrise = datetime(2026, 5, 16, 12, 45, tzinfo=UTC)  # 05:45 PDT
+    fake_sunset = datetime(2026, 5, 17, 3, 8, tzinfo=UTC)     # 20:08 PDT
+    monkeypatch.setattr(
+        "beanclock.solar.sun_times",
+        lambda d, lat, lon: (fake_sunrise, fake_sunset),
+    )
+    _live_pacific(monkeypatch, tmp_path, datetime(2026, 5, 16, hour, minute))
+    captured = _capture_render(monkeypatch)
 
-    from datetime import datetime as _dt
-    from datetime import timedelta as _td
-    from datetime import timezone as _tz
+    assert main(["--config", str(cfg)]) == 0
+    assert captured["after_hours"] is expected
 
-    # Sunrise 07:45 PT, sunset 19:30 PT.
-    fake_sunrise = _dt(2026, 12, 21, 14, 45, tzinfo=UTC)
-    fake_sunset = _dt(2026, 12, 22, 2, 30, tzinfo=UTC)
+
+@pytest.mark.parametrize(("hour", "expected"), [
+    (7, True),   # 07:30 look-ahead is before the 07:45 sunrise
+    (8, False),  # 08:30 is past it
+])
+def test_live_after_hours_inverts_before_sunrise(tmp_path, monkeypatch, hour, expected):
+    cfg = _after_hours_config(tmp_path)
+    fake_sunrise = datetime(2026, 12, 21, 14, 45, tzinfo=UTC)  # 07:45 PT
+    fake_sunset = datetime(2026, 12, 22, 2, 30, tzinfo=UTC)    # 19:30 PT
     monkeypatch.setattr(
         "beanclock.solar.sun_times", lambda d, lat, lon: (fake_sunrise, fake_sunset)
     )
-    PT = _tz(_td(hours=-7))
-    monkeypatch.setattr("beanclock.__main__._system_zone", lambda: PT)
+    _live_pacific(monkeypatch, tmp_path, datetime(2026, 12, 21, hour, 0))
+    captured = _capture_render(monkeypatch)
 
-    captured = {}
-    real_render = __import__("beanclock.render", fromlist=["render"]).render
-
-    def fake_render(*args, **kwargs):
-        captured["after_hours"] = kwargs.get("after_hours", False)
-        return real_render(*args, **kwargs)
-
-    monkeypatch.setattr("beanclock.__main__.render", fake_render)
-
-    # 07:00 + 30min look-ahead = 07:30, still before the 07:45 sunrise.
-    class PreDawn(_dt):
-        @classmethod
-        def now(cls, tz=None):
-            return _dt(2026, 12, 21, 7, 0, tzinfo=tz)
-
-    monkeypatch.setattr("beanclock.__main__.datetime", PreDawn)
-    _called_show(monkeypatch)
     assert main(["--config", str(cfg)]) == 0
-    assert captured["after_hours"] is True
+    assert captured["after_hours"] is expected
 
-    # 08:00 + 30min = 08:30, past sunrise — day mode.
-    class AfterSunrise(_dt):
-        @classmethod
-        def now(cls, tz=None):
-            return _dt(2026, 12, 21, 8, 0, tzinfo=tz)
 
-    monkeypatch.setattr("beanclock.__main__.datetime", AfterSunrise)
-    _called_show(monkeypatch)
+@pytest.mark.parametrize("is_polar_night", [True, False])
+def test_live_polar_sun_times_none_consults_polar_night(tmp_path, monkeypatch, is_polar_night):
+    """No sunrise/sunset today: polar night inverts all day, polar day never."""
+    cfg = _after_hours_config(tmp_path)
+    monkeypatch.setattr("beanclock.solar.sun_times", lambda d, lat, lon: None)
+    monkeypatch.setattr("beanclock.solar.polar_night", lambda d, lat, lon: is_polar_night)
+    _live_pacific(monkeypatch, tmp_path, datetime(2026, 6, 21, 20, 0))
+    captured = _capture_render(monkeypatch)
+
     assert main(["--config", str(cfg)]) == 0
+    assert captured["after_hours"] is is_polar_night
+
+
+def test_live_after_hours_disabled_never_inverts(tmp_path, monkeypatch):
+    """Without after_hours_invert, never invert and never run the sunset calc."""
+    cfg = _write_config(tmp_path, KID + SCHEDULE)
+
+    def boom(*args, **kwargs):
+        raise AssertionError("sun_times called when after-hours is off")
+    monkeypatch.setattr("beanclock.solar.sun_times", boom)
+    calls = _live_pacific(monkeypatch, tmp_path, datetime(2026, 4, 27, 20, 30))
+    captured = _capture_render(monkeypatch)
+
+    assert main(["--config", str(cfg)]) == 0
+    assert len(calls) == 1
     assert captured["after_hours"] is False
 
 
-def _simple_live_config(tmp_path: Path) -> Path:
-    cfg = tmp_path / "config.toml"
-    cfg.write_text(
-        '[kid]\n'
-        'name = "Lily"\n'
-        'born_at = 2022-09-12T03:47:00-07:00\n'
-        '[schedule]\nwake_hour = 7\nsleep_hour = 21\n'
-        '[display]\nformat = "full"\n'
+@pytest.mark.parametrize(("hour", "quiet"), [(20, False), (21, True)])
+def test_live_quiet_only_at_sleep_hour(tmp_path, monkeypatch, hour, quiet):
+    """Only the sleep_hour refresh goes quiet, and it records the marker."""
+    cfg = _simple_live_config(tmp_path)
+    _live_pacific(monkeypatch, tmp_path, datetime(2026, 4, 27, hour, 0))
+    captured = _capture_render(monkeypatch)
+
+    assert main(["--config", str(cfg)]) == 0
+    assert captured["quiet"] is quiet
+    marker = tmp_path / "last-quiet"
+    assert (marker.read_text() if marker.exists() else None) == ("2026-04-27" if quiet else None)
+
+
+def test_main_passes_special_string_to_render_on_birthday(tmp_path, monkeypatch):
+    """main() must hand render() the actual detect_special() string, not just
+    some non-None placeholder."""
+    cfg = _write_config(
+        tmp_path, '[kid]\nname = "Lilah"\nborn_at = 2022-09-12T03:47:00-07:00\n'
     )
-    return cfg
+    captured = _capture_render(monkeypatch)
+    assert main([
+        "--config", str(cfg),
+        "--preview", str(tmp_path / "out.png"),
+        "--now", "2026-09-12T08:00:00-07:00",
+    ]) == 0
+    assert captured["special"] == "Happy 4th Birthday!"
+
+
+def test_main_no_special_passes_none_to_render(tmp_path, monkeypatch):
+    """render() branches on `special is not None`, so an ordinary refresh must
+    pass None, not an empty string."""
+    captured = _capture_render(monkeypatch)
+    assert main([
+        "--config", str(EXAMPLE_CONFIG),
+        "--preview", str(tmp_path / "out.png"),
+        "--now", "2026-04-27T07:47:00-07:00",
+    ]) == 0
+    assert captured["special"] is None
 
 
 def test_missed_sleep_hour_catchup_paints_quiet_once(tmp_path, monkeypatch):
-    """Pi off at 21:00, boots 22:30: Persistent=true fires one catch-up run.
-    Instead of skipping (and freezing volatile metrics overnight), it must
-    paint the quiet layout once, record it, and skip subsequent hours."""
+    """Pi off at 21:00, boots 22:30: paint the quiet layout once, record it,
+    and skip the following hours."""
     cfg = _simple_live_config(tmp_path)
-
-    from datetime import datetime as _dt
-    from datetime import timedelta as _td
-    from datetime import timezone as _tz
-
-    PT = _tz(_td(hours=-7))
-    monkeypatch.setattr("beanclock.__main__._system_zone", lambda: PT)
-    _state_in_tmp(monkeypatch, tmp_path)
-
-    captured = {}
-    real_render = __import__("beanclock.render", fromlist=["render"]).render
-
-    def fake_render(*args, **kwargs):
-        captured["quiet"] = kwargs.get("quiet", False)
-        return real_render(*args, **kwargs)
-
-    monkeypatch.setattr("beanclock.__main__.render", fake_render)
-
-    class LateBoot(_dt):
-        @classmethod
-        def now(cls, tz=None):
-            return _dt(2026, 4, 27, 22, 30, tzinfo=tz)
-
-    monkeypatch.setattr("beanclock.__main__.datetime", LateBoot)
-    calls = _called_show(monkeypatch)
+    calls = _live_pacific(monkeypatch, tmp_path, datetime(2026, 4, 27, 22, 30))
+    captured = _capture_render(monkeypatch)
     assert main(["--config", str(cfg)]) == 0
     assert len(calls) == 1, "catch-up run must refresh the panel"
     assert captured["quiet"] is True
     assert (tmp_path / "last-quiet").read_text() == "2026-04-27"
 
-    # The next hourly fire the same night skips — the catch-up already ran.
-    class NextHour(_dt):
-        @classmethod
-        def now(cls, tz=None):
-            return _dt(2026, 4, 27, 23, 0, tzinfo=tz)
-
-    monkeypatch.setattr("beanclock.__main__.datetime", NextHour)
-    later_calls = _called_show(monkeypatch)
+    _freeze_now(monkeypatch, datetime(2026, 4, 27, 23, 0))
     assert main(["--config", str(cfg)]) == 0
-    assert later_calls == []
+    assert len(calls) == 1
 
 
 def test_no_catchup_when_sleep_hour_refresh_happened(tmp_path, monkeypatch):
-    """The normal 21:00 quiet refresh records its date; an outside-window
-    run later that night must skip as before."""
     cfg = _simple_live_config(tmp_path)
-
-    from datetime import datetime as _dt
-    from datetime import timedelta as _td
-    from datetime import timezone as _tz
-
-    PT = _tz(_td(hours=-7))
-    monkeypatch.setattr("beanclock.__main__._system_zone", lambda: PT)
-    _state_in_tmp(monkeypatch, tmp_path)
+    calls = _live_pacific(monkeypatch, tmp_path, datetime(2026, 4, 27, 22, 30))
     (tmp_path / "last-quiet").write_text("2026-04-27")
-
-    class Evening(_dt):
-        @classmethod
-        def now(cls, tz=None):
-            return _dt(2026, 4, 27, 22, 30, tzinfo=tz)
-
-    monkeypatch.setattr("beanclock.__main__.datetime", Evening)
-    calls = _called_show(monkeypatch)
     assert main(["--config", str(cfg)]) == 0
     assert calls == []
 
 
 def test_small_hours_catchup_uses_yesterday_cutoff(tmp_path, monkeypatch):
-    """After midnight the freeze image belongs to *yesterday's* sleep_hour:
+    """After midnight the overnight image belongs to *yesterday's* sleep_hour:
     a record from yesterday counts as covered, an older one does not."""
     cfg = _simple_live_config(tmp_path)
+    calls = _live_pacific(monkeypatch, tmp_path, datetime(2026, 4, 27, 2, 0))
 
-    from datetime import datetime as _dt
-    from datetime import timedelta as _td
-    from datetime import timezone as _tz
-
-    PT = _tz(_td(hours=-7))
-    monkeypatch.setattr("beanclock.__main__._system_zone", lambda: PT)
-    _state_in_tmp(monkeypatch, tmp_path)
-
-    class SmallHours(_dt):
-        @classmethod
-        def now(cls, tz=None):
-            return _dt(2026, 4, 27, 2, 0, tzinfo=tz)
-
-    monkeypatch.setattr("beanclock.__main__.datetime", SmallHours)
-
-    (tmp_path / "last-quiet").write_text("2026-04-26")  # yesterday — covered
-    calls = _called_show(monkeypatch)
+    (tmp_path / "last-quiet").write_text("2026-04-26")
     assert main(["--config", str(cfg)]) == 0
     assert calls == []
 
-    (tmp_path / "last-quiet").write_text("2026-04-24")  # stale — catch up
-    calls = _called_show(monkeypatch)
+    (tmp_path / "last-quiet").write_text("2026-04-24")
     assert main(["--config", str(cfg)]) == 0
     assert len(calls) == 1
-    # The catch-up covers *yesterday's* (04-26) missed sleep_hour, not
-    # today's — the marker must reflect that (issue #28), not now.date().
+    # The marker names the sleep_hour covered (yesterday), not now.date().
     assert (tmp_path / "last-quiet").read_text() == "2026-04-26"
 
 
 def test_small_hours_catchup_then_missed_next_sleep_hour_both_catch_up(
     tmp_path, monkeypatch
 ):
-    """Issue #28 end-to-end: day N's 21:00 is missed and caught up at 02:00
-    on day N+1; a normal daytime render happens fine; day N+1's *own* 21:00
-    is then also missed, and a 22:30 boot that night must still paint a
-    second quiet catch-up rather than wrongly finding today's date already
-    'covered' by the earlier small-hours catch-up."""
+    """Day N's 21:00 is missed and caught up at 02:00 on day N+1; day N+1's
+    own 21:00 is then also missed. The 22:30 boot that night must still catch
+    up rather than treat the small-hours catch-up as covering today."""
     cfg = _simple_live_config(tmp_path)
-
-    from datetime import datetime as _dt
-    from datetime import timedelta as _td
-    from datetime import timezone as _tz
-
-    PT = _tz(_td(hours=-7))
-    monkeypatch.setattr("beanclock.__main__._system_zone", lambda: PT)
-    _state_in_tmp(monkeypatch, tmp_path)
-
-    # 1. Day N (04-26) 21:00 sleep_hour is missed entirely (Pi off — no
-    #    main() call). Day N+1 (04-27) 02:00: Persistent=true catch-up fires.
-    class SmallHoursCatchup(_dt):
-        @classmethod
-        def now(cls, tz=None):
-            return _dt(2026, 4, 27, 2, 0, tzinfo=tz)
-
-    monkeypatch.setattr("beanclock.__main__.datetime", SmallHoursCatchup)
-    calls = _called_show(monkeypatch)
+    calls = _live_pacific(monkeypatch, tmp_path, datetime(2026, 4, 27, 2, 0))
     assert main(["--config", str(cfg)]) == 0
     assert len(calls) == 1, "first catch-up must paint"
     assert (tmp_path / "last-quiet").read_text() == "2026-04-26"
 
-    # 2. A normal daytime render later on day N+1 must not touch last-quiet.
-    class Daytime(_dt):
-        @classmethod
-        def now(cls, tz=None):
-            return _dt(2026, 4, 27, 12, 0, tzinfo=tz)
-
-    monkeypatch.setattr("beanclock.__main__.datetime", Daytime)
-    daytime_calls = _called_show(monkeypatch)
+    # A normal daytime render must not touch last-quiet.
+    _freeze_now(monkeypatch, datetime(2026, 4, 27, 12, 0))
     assert main(["--config", str(cfg)]) == 0
-    assert len(daytime_calls) == 1
+    assert len(calls) == 2
     assert (tmp_path / "last-quiet").read_text() == "2026-04-26"
 
-    # 3. Day N+1's own 21:00 sleep_hour is also missed (Pi off again — no
-    #    main() call). 22:30 boot that same night must still catch up,
-    #    since today's (04-27) sleep_hour was never actually rendered.
-    class LateBootSameNight(_dt):
-        @classmethod
-        def now(cls, tz=None):
-            return _dt(2026, 4, 27, 22, 30, tzinfo=tz)
-
-    monkeypatch.setattr("beanclock.__main__.datetime", LateBootSameNight)
-    second_calls = _called_show(monkeypatch)
+    _freeze_now(monkeypatch, datetime(2026, 4, 27, 22, 30))
     assert main(["--config", str(cfg)]) == 0
-    assert len(second_calls) == 1, "second same-night catch-up must paint"
+    assert len(calls) == 3, "second same-night catch-up must paint"
     assert (tmp_path / "last-quiet").read_text() == "2026-04-27"
 
 
 def test_render_receives_zone_projected_born_at(tmp_path, monkeypatch):
-    """The footer's 'since <date>' must name the wall-clock day the age math
-    flips on. A 23:47 -07:00 birth viewed from a -04:00 zone projects to the
-    *next* calendar day; render must receive the projected datetime."""
-    cfg = tmp_path / "config.toml"
-    cfg.write_text(
-        '[kid]\n'
-        'name = "Lilah"\n'
-        'born_at = 2022-09-12T23:47:00-07:00\n'
+    """A 23:47 -07:00 birth viewed from -04:00 projects to the next calendar
+    day; the footer date must follow the age math onto it."""
+    cfg = _write_config(
+        tmp_path, '[kid]\nname = "Lilah"\nborn_at = 2022-09-12T23:47:00-07:00\n'
     )
-    captured = {}
-    real_render = __import__("beanclock.render", fromlist=["render"]).render
-
-    def fake_render(*args, **kwargs):
-        captured["born"] = args[2]
-        return real_render(*args, **kwargs)
-
-    monkeypatch.setattr("beanclock.__main__.render", fake_render)
-    rc = main([
+    captured = _capture_render(monkeypatch)
+    assert main([
         "--config", str(cfg),
         "--preview", str(tmp_path / "out.png"),
         "--now", "2026-06-10T12:00:00-04:00",
-    ])
-    assert rc == 0
-    assert (captured["born"].month, captured["born"].day) == (9, 13)
+    ]) == 0
+    born = captured["args"][2]
+    assert (born.month, born.day) == (9, 13)

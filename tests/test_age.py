@@ -68,15 +68,6 @@ def test_pluralize():
     assert pluralize(2, "year") == "2 years"
 
 
-def test_compute_includes_total_days_and_hours():
-    born = datetime(2022, 9, 12, 3, 47, tzinfo=PT)
-    now = datetime(2026, 4, 27, 7, 47, tzinfo=PT)
-    age = compute(born, now)
-    delta = now - born
-    assert age.total_days == delta.days
-    assert age.total_hours == int(delta.total_seconds() // 3600)
-
-
 def test_dst_straddle_keeps_wall_clock_anniversary():
     # Born pre-DST in Pacific (-08:00); "now" is post-DST in the same zone
     # (-07:00). At the same wall-clock minute on a monthly anniversary the

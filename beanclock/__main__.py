@@ -70,7 +70,7 @@ def _system_zone() -> ZoneInfo:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="beanclock", description=__doc__)
+    parser = argparse.ArgumentParser(prog="beanclock")
     parser.add_argument(
         "--config",
         type=Path,
