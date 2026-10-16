@@ -1,6 +1,10 @@
 # BeanClock — kid age e-paper display
 
 [![CI](https://github.com/gkoch02/BeanClock/actions/workflows/ci.yml/badge.svg)](https://github.com/gkoch02/BeanClock/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/gkoch02/BeanClock/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/gkoch02/BeanClock/actions/workflows/github-code-scanning/codeql)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
+[![Raspberry Pi](https://img.shields.io/badge/Raspberry%20Pi-C51A4A?logo=raspberrypi&logoColor=white)](https://www.raspberrypi.com)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 A tiny appliance: a Raspberry Pi Zero 2 W driving a Waveshare 2.13"
 black/white/red e-paper (V4) shows how old your kiddo is, broken down into
