@@ -53,7 +53,7 @@ def _ink_x_extent(img, y_range, x_range=None):
 
 
 def test_render_returns_two_planes_at_panel_size():
-    black, red = render("Lilah", AGE, BORN)
+    black, red = render("Bean", AGE, BORN)
     assert black.size == (WIDTH, HEIGHT)
     assert red.size == (WIDTH, HEIGHT)
     assert black.mode == "1"
@@ -63,8 +63,8 @@ def test_render_returns_two_planes_at_panel_size():
 
 
 def test_render_flip_rotates_both_planes():
-    upright = render("Lilah", AGE, BORN, flip=False)
-    flipped = render("Lilah", AGE, BORN, flip=True)
+    upright = render("Bean", AGE, BORN, flip=False)
+    flipped = render("Bean", AGE, BORN, flip=True)
     assert upright[0].tobytes() != flipped[0].tobytes()
     assert upright[1].tobytes() != flipped[1].tobytes()
 
@@ -72,8 +72,8 @@ def test_render_flip_rotates_both_planes():
 def test_render_after_hours_inverts_black_only():
     """after_hours flips black/white but leaves red untouched, so the
     panel reads white-on-black with red beads still in place."""
-    normal = render("Lilah", AGE, BORN)
-    inverted = render("Lilah", AGE, BORN, after_hours=True)
+    normal = render("Bean", AGE, BORN)
+    inverted = render("Bean", AGE, BORN, after_hours=True)
     assert normal[0].tobytes() != inverted[0].tobytes()
     assert normal[1].tobytes() == inverted[1].tobytes()
 
@@ -82,8 +82,8 @@ def test_render_after_hours_makes_background_inked():
     """After inversion, what used to be the white panel background should
     now be inked on the black plane. Sample a margin pixel that's outside
     the frame and well clear of any glyphs."""
-    normal_black, _ = render("Lilah", AGE, BORN)
-    inv_black, _ = render("Lilah", AGE, BORN, after_hours=True)
+    normal_black, _ = render("Bean", AGE, BORN)
+    inv_black, _ = render("Bean", AGE, BORN, after_hours=True)
     np = normal_black.load()
     ip = inv_black.load()
     # (0, 0) is the very top-left corner — outside the rounded frame, so
@@ -97,10 +97,10 @@ def test_render_after_hours_combines_with_flip():
     """flip and after_hours are independent and must compose. Inverted-
     then-flipped should differ from just-inverted, just-flipped, and
     plain renders."""
-    plain = render("Lilah", AGE, BORN)[0].tobytes()
-    flipped = render("Lilah", AGE, BORN, flip=True)[0].tobytes()
-    inverted = render("Lilah", AGE, BORN, after_hours=True)[0].tobytes()
-    both = render("Lilah", AGE, BORN, flip=True, after_hours=True)[0].tobytes()
+    plain = render("Bean", AGE, BORN)[0].tobytes()
+    flipped = render("Bean", AGE, BORN, flip=True)[0].tobytes()
+    inverted = render("Bean", AGE, BORN, after_hours=True)[0].tobytes()
+    both = render("Bean", AGE, BORN, flip=True, after_hours=True)[0].tobytes()
     assert len({plain, flipped, inverted, both}) == 4
 
 
@@ -112,7 +112,7 @@ def test_accents_produce_distinct_red_planes():
     regression (e.g. _ACCENTS.get always returning the default) would slip
     past the existing "ink exists" check."""
     planes = [
-        render("Lilah", TWO_YEARS, BORN, accent=a)[1].tobytes() for a in ACCENTS
+        render("Bean", TWO_YEARS, BORN, accent=a)[1].tobytes() for a in ACCENTS
     ]
     for i, a in enumerate(planes):
         for b in planes[i + 1 :]:
@@ -122,7 +122,7 @@ def test_accents_produce_distinct_red_planes():
 def test_text_clears_frame_pad_margin():
     """No black text ink in the FRAME_PAD keep-out rows. The central x-band
     skips the rounded corners of the outer hairline."""
-    black, _ = render("Lilah", AGE, BORN)
+    black, _ = render("Bean", AGE, BORN)
     bp = black.load()
 
     for y in range(2, FRAME_PAD):
@@ -138,7 +138,7 @@ def test_hero_auto_shrinks_to_stay_within_width_budget():
     A long hero like '99 years  11 months' should still center within the
     budgeted band (left edge >= 14, right edge <= WIDTH-14). We restrict
     the x search to skip the frame outline at x=1 and x=WIDTH-2."""
-    black, _ = render("Lilah", LONG_AGE, BORN)
+    black, _ = render("Bean", LONG_AGE, BORN)
     inner = range(10, WIDTH - 10)
     extent = _ink_x_extent(black, range(33, 62), inner)
     assert extent is not None, "expected hero ink"
@@ -152,7 +152,7 @@ def test_format_modes_produce_distinct_planes():
     regression that ignored the new field would slip past the per-format
     smoke checks below."""
     planes = {
-        fmt: render("Lilah", AGE, BORN, age_format=fmt)[0].tobytes()
+        fmt: render("Bean", AGE, BORN, age_format=fmt)[0].tobytes()
         for fmt in ("extended", "days", "hours", "full")
     }
     assert planes["extended"] != planes["days"]
@@ -167,8 +167,8 @@ def test_format_full_adds_ink_in_bottom_corners():
     the bottom-left and bottom-right of the black plane. The two corners
     must gain ink relative to plain extended; otherwise the totals aren't
     actually being painted."""
-    extended_black, _ = render("Lilah", AGE, BORN, age_format="extended")
-    full_black, _ = render("Lilah", AGE, BORN, age_format="full")
+    extended_black, _ = render("Bean", AGE, BORN, age_format="extended")
+    full_black, _ = render("Bean", AGE, BORN, age_format="full")
     footer_band = range(HEIGHT - FRAME_PAD - 13, HEIGHT - FRAME_PAD)
     left = range(10, 60)
     right = range(WIDTH - 60, WIDTH - 10)
@@ -194,7 +194,7 @@ def test_format_full_corners_read_total_days_and_total_hours():
     right_box = (2 * WIDTH // 3, footer_y, WIDTH, HEIGHT)
 
     def corners(age):
-        black, _ = render("Lilah", age, BORN, age_format="full")
+        black, _ = render("Bean", age, BORN, age_format="full")
         return black.crop(left_box).tobytes(), black.crop(right_box).tobytes()
 
     base_l, base_r = corners(base)
@@ -209,8 +209,8 @@ def test_format_full_preserves_extended_hero_and_sub():
     band (y=33..62) and sub band (y=68..86) must be byte-identical so
     layout regressions in the upper region get caught here rather than
     drowning in the bottom-corner diff."""
-    extended_black, _ = render("Lilah", AGE, BORN, age_format="extended")
-    full_black, _ = render("Lilah", AGE, BORN, age_format="full")
+    extended_black, _ = render("Bean", AGE, BORN, age_format="extended")
+    full_black, _ = render("Bean", AGE, BORN, age_format="full")
     ep = extended_black.load()
     fp = full_black.load()
     for y in list(range(33, 62)) + list(range(68, 86)):
@@ -227,8 +227,8 @@ def test_format_days_short_circuits_zero_to_newborn():
     into the newborn branch, so their hero text — and thus the black
     plane below the header — should be identical."""
     fresh = AgeBreakdown(0, 0, 0, 0, total_days=0, total_hours=0)
-    days_black, _ = render("Lilah", fresh, BORN, age_format="days")
-    hours_black, _ = render("Lilah", fresh, BORN, age_format="hours")
+    days_black, _ = render("Bean", fresh, BORN, age_format="days")
+    hours_black, _ = render("Bean", fresh, BORN, age_format="hours")
     assert days_black.tobytes() == hours_black.tobytes()
 
 
@@ -239,8 +239,8 @@ def test_format_days_uses_total_days_not_calendar_days():
     calendar-days input — pin the distinction."""
     big = AgeBreakdown(0, 0, 15, 0, total_days=1324, total_hours=31780)
     small = AgeBreakdown(0, 0, 15, 0, total_days=15, total_hours=360)
-    big_black, _ = render("Lilah", big, BORN, age_format="days")
-    small_black, _ = render("Lilah", small, BORN, age_format="days")
+    big_black, _ = render("Bean", big, BORN, age_format="days")
+    small_black, _ = render("Bean", small, BORN, age_format="days")
     assert big_black.tobytes() != small_black.tobytes()
 
 
@@ -248,17 +248,17 @@ def test_special_hero_replaces_normal_hero():
     """In special-day mode the hero text is the override string, and the
     standard "Y years M months" phrasing is demoted to the sub line — so
     the black plane must differ from the non-special render."""
-    plain = render("Lilah", AGE, BORN)[0].tobytes()
-    special = render("Lilah", AGE, BORN, special="Happy 4th Birthday!")[0].tobytes()
+    plain = render("Bean", AGE, BORN)[0].tobytes()
+    special = render("Bean", AGE, BORN, special="Happy 4th Birthday!")[0].tobytes()
     assert plain != special
 
 
 def test_special_overrides_days_format():
     """Special days take over regardless of age_format. Pin this so a future
     refactor doesn't accidentally restore the days/hours hero on a milestone."""
-    days = render("Lilah", AGE, BORN, age_format="days")[0].tobytes()
+    days = render("Bean", AGE, BORN, age_format="days")[0].tobytes()
     special = render(
-        "Lilah", AGE, BORN, age_format="days", special="1000 days!"
+        "Bean", AGE, BORN, age_format="days", special="1000 days!"
     )[0].tobytes()
     assert days != special
 
@@ -266,7 +266,7 @@ def test_special_overrides_days_format():
 def test_special_long_label_respects_width_budget():
     """'Happy 99th Birthday!' must shrink rather than overflow the frame —
     the same shrink loop the standard hero relies on."""
-    black, _ = render("Lilah", LONG_AGE, BORN, special="Happy 99th Birthday!")
+    black, _ = render("Bean", LONG_AGE, BORN, special="Happy 99th Birthday!")
     inner = range(10, WIDTH - 10)
     extent = _ink_x_extent(black, range(33, 62), inner)
     assert extent is not None
@@ -446,8 +446,8 @@ def test_quiet_drops_sub_line():
     """Quiet mode hides the days/hours sub line, so the band where the sub
     normally sits (y=68..86) loses its text ink. Constrain x to skip the
     frame's outer hairline at x=1 and x=WIDTH-2."""
-    normal_black, _ = render("Lilah", AGE, BORN, age_format="extended")
-    quiet_black, _ = render("Lilah", AGE, BORN, age_format="extended", quiet=True)
+    normal_black, _ = render("Bean", AGE, BORN, age_format="extended")
+    quiet_black, _ = render("Bean", AGE, BORN, age_format="extended", quiet=True)
     sub_band = range(68, 86)
     inner = range(20, WIDTH - 20)
     assert _ink_x_extent(normal_black, sub_band, inner) is not None
@@ -459,8 +459,8 @@ def test_quiet_keeps_hero_at_two_line_baseline():
     not recenter to HERO_Y_ONE_LINE — the user wants the hero in the same
     spot as the daytime extended layout so the panel doesn't visually
     shift at the daily flip into quiet hours."""
-    extended_black, _ = render("Lilah", AGE, BORN, age_format="extended")
-    quiet_black, _ = render("Lilah", AGE, BORN, age_format="extended", quiet=True)
+    extended_black, _ = render("Bean", AGE, BORN, age_format="extended")
+    quiet_black, _ = render("Bean", AGE, BORN, age_format="extended", quiet=True)
     ep = extended_black.load()
     qp = quiet_black.load()
     # Hero band is byte-identical when only the sub differs.
@@ -471,7 +471,7 @@ def test_quiet_keeps_hero_at_two_line_baseline():
 
 def test_quiet_keeps_footer_since_date():
     """The "since <date>" footer is static, not a stale metric — it stays."""
-    quiet_black, quiet_red = render("Lilah", AGE, BORN, quiet=True)
+    quiet_black, quiet_red = render("Bean", AGE, BORN, quiet=True)
     footer_band = range(HEIGHT - FRAME_PAD - 13, HEIGHT - FRAME_PAD)
     assert _ink_x_extent(quiet_red, footer_band) is not None
 
@@ -479,8 +479,8 @@ def test_quiet_keeps_footer_since_date():
 def test_quiet_drops_full_mode_corner_totals():
     """`full` augments extended with bottom-corner total_days/total_hours
     readouts, but those would go stale overnight — quiet must suppress them."""
-    full_black, _ = render("Lilah", AGE, BORN, age_format="full")
-    quiet_black, _ = render("Lilah", AGE, BORN, age_format="full", quiet=True)
+    full_black, _ = render("Bean", AGE, BORN, age_format="full")
+    quiet_black, _ = render("Bean", AGE, BORN, age_format="full", quiet=True)
     footer_band = range(HEIGHT - FRAME_PAD - 13, HEIGHT - FRAME_PAD)
     left = range(10, 60)
     right = range(WIDTH - 60, WIDTH - 10)
@@ -495,17 +495,17 @@ def test_quiet_overrides_special_day():
     hero. A birthday render in quiet mode must match a non-special quiet
     render — the birthday string never appears."""
     bday_quiet = render(
-        "Lilah", AGE, BORN, special="Happy 4th Birthday!", quiet=True
+        "Bean", AGE, BORN, special="Happy 4th Birthday!", quiet=True
     )[0].tobytes()
-    plain_quiet = render("Lilah", AGE, BORN, quiet=True)[0].tobytes()
+    plain_quiet = render("Bean", AGE, BORN, quiet=True)[0].tobytes()
     assert bday_quiet == plain_quiet
 
 
 def test_quiet_overrides_age_format_days():
     """Quiet wins over age_format too — a "days" config at sleep_hour must
     not show the days hero (would freeze a stale "1324 days" overnight)."""
-    days_quiet = render("Lilah", AGE, BORN, age_format="days", quiet=True)[0].tobytes()
-    plain_quiet = render("Lilah", AGE, BORN, quiet=True)[0].tobytes()
+    days_quiet = render("Bean", AGE, BORN, age_format="days", quiet=True)[0].tobytes()
+    plain_quiet = render("Bean", AGE, BORN, quiet=True)[0].tobytes()
     assert days_quiet == plain_quiet
 
 
@@ -513,7 +513,7 @@ def test_quiet_combines_with_after_hours():
     """Quiet and after_hours are independent and must compose. At ~sunset on
     sleep_hour, both are on; both passes should still produce a usable image
     (red ink not masked by the inverted black plane)."""
-    inv_black, red = render("Lilah", AGE, BORN, after_hours=True, quiet=True)
+    inv_black, red = render("Bean", AGE, BORN, after_hours=True, quiet=True)
     rp = red.load()
     bp = inv_black.load()
     red_pixels = [(x, y) for y in range(HEIGHT) for x in range(WIDTH) if rp[x, y] == 0]
@@ -525,7 +525,7 @@ def test_quiet_combines_with_after_hours():
 def test_hero_shrink_loop_stops_at_16pt_floor():
     """Text too wide even at 16pt is painted at exactly 16pt, not smaller."""
     overlong = "Happy 100th Birthday from Grandma and Grandpa!"
-    black, _ = render("Lilah", AGE, BORN, special=overlong)
+    black, _ = render("Bean", AGE, BORN, special=overlong)
     expected = Image.new("1", (WIDTH, HEIGHT), 1)
     _draw_centered(ImageDraw.Draw(expected), 33, overlong, _font(16, "Bold"))
     hero_band = (FRAME_PAD, 33, WIDTH - FRAME_PAD, 62)
@@ -586,16 +586,16 @@ def test_flip_after_hours_red_plane_matches_flipped_normal():
     """Order of operations: render() inverts the black plane first, then
     rotates both planes together. So the red plane in (flip + after_hours)
     must equal the red plane in plain flip — inversion only touches black."""
-    flip_only = render("Lilah", AGE, BORN, flip=True)
-    both = render("Lilah", AGE, BORN, flip=True, after_hours=True)
+    flip_only = render("Bean", AGE, BORN, flip=True)
+    both = render("Bean", AGE, BORN, flip=True, after_hours=True)
     assert flip_only[1].tobytes() == both[1].tobytes()
 
 
 def test_heart_accent_omits_footer_accent_glyph():
     """Every accent but heart paints a small glyph left of the "since …"
     footer; compare the columns just left of the footer text."""
-    _, heart_red = render("Lilah", AGE, BORN, accent="heart")
-    _, star_red = render("Lilah", AGE, BORN, accent="star")
+    _, heart_red = render("Bean", AGE, BORN, accent="heart")
+    _, star_red = render("Bean", AGE, BORN, accent="star")
     footer_band = range(HEIGHT - FRAME_PAD - 13, HEIGHT - FRAME_PAD)
     left_of_footer = range(30, 60)
     assert _ink_x_extent(star_red, footer_band, left_of_footer) is not None
@@ -625,8 +625,8 @@ def test_compose_preview_color_mapping():
 def test_after_hours_punches_black_under_red_all_accents(accent):
     """For every accent, red ink must not be masked by the inverted black plane.
     Accent-specific branches in _draw_frame mean regressions can be accent-local."""
-    _, red = render("Lilah", AGE, BORN, accent=accent)
-    inv_black, _ = render("Lilah", AGE, BORN, accent=accent, after_hours=True)
+    _, red = render("Bean", AGE, BORN, accent=accent)
+    inv_black, _ = render("Bean", AGE, BORN, accent=accent, after_hours=True)
     rp = red.load()
     bp = inv_black.load()
     red_pixels = [(x, y) for y in range(HEIGHT) for x in range(WIDTH) if rp[x, y] == 0]
