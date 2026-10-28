@@ -505,7 +505,7 @@ def test_main_passes_special_string_to_render_on_birthday(tmp_path, monkeypatch)
     """main() must hand render() the actual detect_special() string, not just
     some non-None placeholder."""
     cfg = _write_config(
-        tmp_path, '[kid]\nname = "Lilah"\nborn_at = 2022-09-12T03:47:00-07:00\n'
+        tmp_path, '[kid]\nname = "Bean"\nborn_at = 2022-09-12T03:47:00-07:00\n'
     )
     captured = _capture_render(monkeypatch)
     assert main([
@@ -597,7 +597,7 @@ def test_render_receives_zone_projected_born_at(tmp_path, monkeypatch):
     """A 23:47 -07:00 birth viewed from -04:00 projects to the next calendar
     day; the footer date must follow the age math onto it."""
     cfg = _write_config(
-        tmp_path, '[kid]\nname = "Lilah"\nborn_at = 2022-09-12T23:47:00-07:00\n'
+        tmp_path, '[kid]\nname = "Bean"\nborn_at = 2022-09-12T23:47:00-07:00\n'
     )
     captured = _capture_render(monkeypatch)
     assert main([

@@ -1,4 +1,4 @@
-# BeanClock — kid age e-paper display
+# BeanClock
 
 [![CI](https://github.com/gkoch02/BeanClock/actions/workflows/ci.yml/badge.svg)](https://github.com/gkoch02/BeanClock/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/gkoch02/BeanClock/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/gkoch02/BeanClock/actions/workflows/github-code-scanning/codeql)
@@ -24,55 +24,42 @@ the age is spelled out. A spread:
 | --- | --- | --- |
 | ![moon accent](docs/preview-moon.png) | ![sun accent](docs/preview-sun.png) | ![flower accent](docs/preview-flower.png) |
 
-## Features
+## What it does
 
-- Beautiful, legible, playful layout — rounded **Fredoka** type, two-color
-  accents (heart / star / balloon / moon / sun / flower), no fussy clipart.
-- Hourly refresh during a configurable wake window (default 07:00–21:00 local
-  time), driven by a `systemd` timer that fires every hour and a wake-window
-  check in the script itself — edit `/etc/beanclock/config.toml` to change the
-  hours, no timer reload needed.
-- Special-day takeovers: on the kid's birthday the hero row reads "Happy Nth
-  Birthday!", and on configurable day-count milestones (default 100 / 500 /
-  1000 / 2000 / 5000) it reads "N days!" — the standard "Y years M months"
-  phrasing slides to the sub line.
-- Single TOML config file for the kid's name, birth datetime+timezone, wake
-  window, and accent glyph.
-- **After-hours inversion** — while it's dark out (after sunset or before
-  sunrise, computed from your `latitude`/`longitude` using a built-in NOAA
-  algorithm, no network or API key needed) the black plane inverts to
-  white-on-black so the display reads more comfortably in a dark room; red
-  accents stay red. Inversion only fires within the configured wake window —
-  deep-night hours still skip the refresh entirely.
-- Once-a-day full clear to suppress ghosting; the other ~14 daily refreshes
-  go straight to `display()` for less flicker.
-- **Quiet last refresh** — the refresh at `sleep_hour` (the last one before
-  the overnight freeze) drops the volatile days/hours sub line and the
-  `full`-mode totals, so the panel doesn't sit overnight showing yesterday's
-  hour count. If the Pi happened to be off at `sleep_hour`, the first run
-  after boot paints the quiet layout once as a catch-up.
-- **Bounded hardware calls** — every e-paper call (init / refresh / sleep)
-  runs under its own deadline, so a stuck BUSY pin fails the run loudly
-  within a bounded time instead of hanging the service and blocking every
-  later hourly refresh. Putting the panel back to sleep is always attempted,
-  even when init or refresh failed — and if that attempt fails too, it is
-  logged without hiding the original error.
-- Pure-Python, vendored Waveshare driver — no apt-time setup beyond Pillow's
-  runtime libs.
+The layout is rounded **Fredoka** type in black with a red accent at the
+corners (heart, star, balloon, moon, sun or flower). A `systemd` timer fires
+every hour; the script itself checks the wake window (07:00–21:00 local time
+by default) and exits outside it, so changing the hours in
+`/etc/beanclock/config.toml` needs no timer reload. The first refresh of the
+day is a full clear to suppress ghosting; the rest go straight to `display()`
+for less flicker.
 
-## Bill of materials
+On the kid's birthday the hero row reads "Happy Nth Birthday!", and on
+day-count milestones (100, 500, 1000, 2000 and 5000 by default) it reads
+"N days!", with the usual "Y years M months" sliding to the sub line.
 
-| # | Part | Qty | Notes |
-| - | ---- | --- | ----- |
-| 1 | Raspberry Pi Zero 2 W | 1 | Any 64-bit Pi running Raspberry Pi OS Bookworm works; the Zero 2 W is the cheapest fit and the form factor the case/stand are sized for. |
-| 2 | Waveshare 2.13" e-Paper HAT, **B/W/R, V4** (250×122) | 1 | Three-colour panel + driver board in one. The 40-pin female header drops straight onto the Pi's GPIO — no soldering, no jumpers. Make sure it's the **V4** revision; earlier revs use a different controller and the vendored driver won't talk to them. |
-| 3 | microSD card, 8 GB or larger (Class 10 / A1) | 1 | Pi OS Lite (Bookworm or newer). 8 GB is plenty; the appliance writes almost nothing to disk. |
-| 4 | USB micro-B power supply, 5 V / ≥ 2 A | 1 | The official Pi Zero supply is fine. The Zero 2 W uses **micro-B**, not USB-C. |
-| 5 | Case / stand (optional) | 1 | Anything that exposes the panel and lets the 40-pin header seat fully on the Pi. |
+After sunset and before sunrise, computed from your `latitude`/`longitude`
+with a built-in NOAA algorithm, the black plane inverts to white-on-black so
+the panel reads more comfortably in a dark room; red accents stay red. The
+inversion only runs within the wake window. The last refresh of the day, at
+`sleep_hour`, drops the days/hours sub line and the `full` layout's totals so
+the panel doesn't sit overnight showing yesterday's hour count; if the Pi was
+off at that hour, the first run after boot paints that quiet layout once.
 
-SPI must be enabled on the Pi — `scripts/install.sh` does that for you
-(`sudo raspi-config` → Interface Options → SPI if you'd rather do it by
-hand). No other apt packages or HATs are required.
+Every e-paper call (init, refresh, sleep) runs under its own deadline, so a
+stuck BUSY pin fails the run within a bounded time instead of hanging the
+service and blocking later refreshes. The panel is always put back to sleep,
+even after a failed init or refresh.
+
+## Hardware
+
+A Raspberry Pi Zero 2 W (any 64-bit Pi on Raspberry Pi OS Bookworm works; the
+Zero 2 W is the cheapest fit), a Waveshare 2.13" e-Paper HAT in the **B/W/R,
+V4** revision (250×122; earlier revisions use a different controller and the
+vendored driver won't talk to them), a microSD card of 8 GB or more, and a
+5 V micro-B supply. The HAT's 40-pin header seats straight onto the Pi's
+GPIO, with no soldering. SPI must be enabled; `scripts/install.sh` does that
+(`sudo raspi-config` → Interface Options → SPI by hand).
 
 ## Quick start
 
@@ -92,9 +79,10 @@ systemctl list-timers beanclock.timer        # confirm next hourly fire
 timezone, so it must be a real zoneinfo (e.g. `America/Los_Angeles`) for
 the wake window to track DST correctly.
 
-The installer creates `beanclock` system user, builds a virtualenv at
-`/opt/beanclock/.venv`, copies the `systemd` units, enables SPI, and starts the
-timer.
+The installer creates the `beanclock` system user, installs `python3-venv`
+and Pillow's runtime libraries from apt, builds a virtualenv at
+`/opt/beanclock/.venv`, copies the `systemd` units, enables SPI, and starts
+the timer. The Waveshare driver is vendored, so nothing else is needed.
 
 ## Configuration
 
@@ -102,9 +90,9 @@ Annotated, with the same values as `config.example.toml`:
 
 ```toml
 [kid]
-name = "Lilah"
+name = "Bean"
 # Local wall-clock time of birth, with timezone offset.
-born_at = 2022-09-12T03:47:00-07:00
+born_at = 2023-03-14T09:00:00-07:00
 
 [schedule]
 wake_hour  = 7    # inclusive, local time of first daily update
@@ -165,26 +153,9 @@ xdg-open /tmp/p.png                          # eyeball the layout
 
 `--now 2026-04-27T07:00:00-07:00` lets you simulate any moment without
 touching the system clock. `--after-hours` forces the inverted
-(white-on-black) look for layout work without waiting for sunset; combine
-both flags for deterministic screenshots of the night-mode layout.
-
-## Repo layout
-
-```
-beanclock/                    # package
-  age.py                      # AgeBreakdown + dateutil-based compute()
-  config.py                   # TOML loader + validation
-  render.py                   # Pillow → (black plane, red plane)
-  display.py                  # thin wrapper around the vendored driver
-  special.py                  # birthday + milestone detection
-  solar.py                    # sunrise/sunset for after-hours inversion
-  fonts/Fredoka.ttf           # SIL OFL variable font (shipped with the wheel)
-  __main__.py                 # entrypoint: load → render → display | --preview
-vendor/waveshare_epd/         # vendored from waveshareteam/e-Paper
-systemd/beanclock.{service,timer}
-scripts/install.sh            # idempotent installer
-tests/                        # pure-Python (no panel)
-```
+(white-on-black) look and `--quiet` the last-refresh-of-the-day layout, for
+layout work without waiting for sunset; combine them with `--now` for
+deterministic screenshots.
 
 ## Troubleshooting
 
@@ -192,21 +163,12 @@ tests/                        # pure-Python (no panel)
   detection`** — SPI is not enabled or the user is not in the `spi`/`gpio`
   groups. Re-run the installer.
 - **Display is upside down** — set `flip = true` in `config.toml`.
-- **`DisplayTimeoutError` naming `epd.init()` (30s) or the refresh (60s)** —
-  the panel never released its BUSY pin. Usually a poorly seated ribbon cable
-  or a failing panel; reseat the HAT and the FPC connector. The run fails
-  within the budget rather than hanging the hourly timer, so the next hour's
-  fire is unaffected.
-- **`DisplayTimeoutError` naming `epd.sleep()` (10s)** — a different fault:
-  `sleep()` never waits on BUSY, it just sends DEEP_SLEEP and closes the bus.
-  This deadline only trips on a wedged SPI write, so look at the SPI device
-  rather than the ribbon cable.
-- **`DisplayInitError: epd.init() returned -1`** — a defensive guard against
-  the vendored driver's documented failure sentinel. You should not normally
-  see it: on the Raspberry Pi path `module_init()` either returns 0 or raises
-  outright (a missing SPI device raises from `SPI.open`), and an unresponsive
-  panel surfaces as `DisplayTimeoutError` instead. If it does appear, the
-  vendored driver or its `epdconfig` differs from the one shipped here.
+- **`DisplayTimeoutError` naming `epd.init()` or the refresh** — the panel
+  never released its BUSY pin. Usually a poorly seated ribbon cable or a
+  failing panel; reseat the HAT and the FPC connector.
+- **`DisplayTimeoutError` naming `epd.sleep()`** — a wedged SPI write, since
+  `sleep()` never waits on BUSY; look at the SPI device rather than the
+  ribbon cable.
 - **Ghosting** — the daily clear at the first wake-hour fire wipes residual
   burn-in. Force one with `sudo rm /var/lib/beanclock/last-clear && sudo
   systemctl start beanclock.service`.

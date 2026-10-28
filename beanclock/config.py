@@ -72,7 +72,7 @@ def load(path: Path) -> Config:
     if not isinstance(born_at, datetime):
         raise ValueError(
             "kid.born_at must be a TOML datetime with offset, "
-            "e.g. 2022-09-12T03:47:00-07:00"
+            "e.g. 2023-03-14T09:00:00-07:00"
         )
     if born_at.tzinfo is None:
         raise ValueError("kid.born_at must include a timezone offset")
