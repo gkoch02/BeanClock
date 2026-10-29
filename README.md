@@ -6,6 +6,8 @@
 [![Raspberry Pi](https://img.shields.io/badge/Raspberry%20Pi-C51A4A?logo=raspberrypi&logoColor=white)](https://www.raspberrypi.com)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
+![BeanClock: the wordmark and a row of heart beads beside the panel, which reads "Bean is 3 years 3 months, 15 days · 1 hour, since Mar 14, 2023"](docs/banner.png)
+
 A tiny appliance: a Raspberry Pi Zero 2 W driving a Waveshare 2.13"
 black/white/red e-paper (V4) shows how old your kiddo is, broken down into
 years / months / days / hours. It refreshes once an hour during waking hours
